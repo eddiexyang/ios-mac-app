@@ -168,6 +168,8 @@ publish:gitlab:release:
 {% if config.releaseChannel == "production" %}
 .release_mirror_template:
   stage: publish
+  tags:
+    - shared-small
   variables:
     RELEASE_SYNC_TO_BRANCH: "{{ config.userProperties.releaseBranch }}"
     RELEASE_SYNC_FROM_BRANCH: "{{ config.userProperties.releaseBranch }}"
