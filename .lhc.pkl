@@ -202,7 +202,7 @@ local ios = (base) {
             if (base.releaseChannel == "alpha") read?("env:SLACK_BUILDS_URL") else
             read?("env:SLACK_RELEASE_URL")
 
-        languages = "en-US,ar-SA,zh-Hant,nl-NL,en-GB,fr-FR,fr-CA,de-DE,id,it,ja,pl,pt-BR,ru,es-MX,es-ES,uk,tr"
+        languages = "en-US,ar-SA,zh-Hant,zh-Hans,nl-NL,en-GB,fr-FR,fr-CA,de-DE,id,it,ja,pl,pt-BR,ru,es-MX,es-ES,uk,tr"
     }
 }
 
