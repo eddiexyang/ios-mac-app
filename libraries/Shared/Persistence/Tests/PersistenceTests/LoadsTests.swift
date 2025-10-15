@@ -55,8 +55,55 @@ final class LoadsTests: TestIsolatedDatabaseTestCase {
         XCTAssertEqual(updatedServerA?.logical.score, 3)
         XCTAssertEqual(updatedServerA?.logical.status, 1)
 
-        XCTAssertEqual(updatedServerB?.logical.load, 0)
+        XCTAssertEqual(updatedServerB?.logical.load, 25)
+        XCTAssertEqual(updatedServerB?.logical.score, 1)
+        XCTAssertEqual(updatedServerB?.logical.status, 0)
+    }
+
+    /// When according to the server loads response, a server comes online from maintenance, we don't know which
+    /// endpoint has just come back online. In this case, we don't have enough information to set the logical status
+    /// to 0.
+    func testLoadsIgnoredForLogicalsComingOutOfMaintenance() throws {
+        repository.upsert(servers: [
+            TestData.serverUnderMaintenance(
+                id: "a",
+                name: "CH#1",
+                countryCode: "CH",
+                tier: 3,
+                load: 25,
+                score: 2
+            ),
+            TestData.createMockServer(
+                withID: "b",
+                name: "CH#2",
+                countryCode: "CH",
+                tier: 3,
+                load: 30,
+                score: 3,
+                status: 1
+            ),
+        ])
+
+        repository.upsert(loads: [
+            // Server `a` leaves maintenance, so this update should be disregarded
+            .init(serverId: "a", load: 10, score: 0, status: 1),
+            // Server `b` is wasn't under maintenance, so we can safely update these values locally
+            .init(serverId: "b", load: 10, score: 0, status: 1),
+        ])
+
+        let updatedServerA = repository.getFirstServer(filteredBy: [.logicalID("a")], orderedBy: .none)
+        let updatedServerB = repository.getFirstServer(filteredBy: [.logicalID("b")], orderedBy: .none)
+
+        // This logical should still be marked as under maintenance, despite the new status being 0, since we don't
+        // know which of its endpoints to update.
+        XCTAssertEqual(updatedServerA?.logical.load, 25)
+        XCTAssertEqual(updatedServerA?.logical.score, 2)
+        XCTAssertEqual(updatedServerA?.logical.isUnderMaintenance, true)
+
+        // This logical should also still be marked as under maintenance, but we should respect the other values
+        // (score, load) from the API response
+        XCTAssertEqual(updatedServerB?.logical.load, 10)
         XCTAssertEqual(updatedServerB?.logical.score, 0)
-        XCTAssertEqual(updatedServerB?.logical.status, 1)
+        XCTAssertEqual(updatedServerB?.logical.isUnderMaintenance, false)
     }
 }
