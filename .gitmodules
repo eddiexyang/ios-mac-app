@@ -1,7 +1,7 @@
 [submodule "external/protoncore"]
 	path = external/protoncore
 	url = ../../shared/protoncore
-	tag = 33.5.1
+    branch = hotfix/ios/6.6.2/jkb/fix/trustkit-payments-v2
 [submodule "external/apple-fusion"]
 	path = external/apple-fusion
 	url = ../../../tpe/apple-fusion
