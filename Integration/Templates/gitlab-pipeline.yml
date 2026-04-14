@@ -54,7 +54,7 @@ include:
        config.build.ci.refName == config.userProperties.releaseBranch
 -%}{# Include the Nexus release upload jobs #}
 {% for configuration, _ in config.build.configurations %}{# Jobs amended in publish template #}
-  - component: "gitlab.protontech.ch/proton/devops/cicd-components/tools/artifactlift/release-candidate@0.1.20"
+  - component: "gitlab.protontech.ch/proton/devops/cicd-components/tools/artifactlift/release-candidate@0.1.36"
     inputs:
       stage: publish
       product: vpn
@@ -67,7 +67,7 @@ include:
       {% endif %}
 {% endfor %}
 {% elif config.build.ci.tagName -%}{# Include the Nexus release promotion jobs #}
-  - component: "gitlab.protontech.ch/proton/devops/cicd-components/tools/artifactlift/release@0.1.20"
+  - component: "gitlab.protontech.ch/proton/devops/cicd-components/tools/artifactlift/release@0.1.36"
     inputs:
       stage: publish
       product: vpn
