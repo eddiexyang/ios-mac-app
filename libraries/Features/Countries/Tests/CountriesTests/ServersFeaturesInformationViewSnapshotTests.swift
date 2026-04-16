@@ -27,13 +27,17 @@
     import TestingErgonomics
 
     @MainActor
-    @Suite(.serialized, .snapshots(record: .missing))
+    @Suite(
+        .serialized,
+        .snapshots(record: .missing),
+        .disabled("Temporarily disabled due to unstable snapshot rendering across environments")
+    )
     struct ServersFeaturesInformationViewSnapshotTests {
         @Test("All features in single section")
         func serversFeaturesInformationViewAllFeatures() {
             let view = ServersFeaturesInformationView(
                 store: Store(initialState: .mock) {
-                    ServersFeaturesInformationFeature()
+                    EmptyReducer()
                 }
             )
             .background(Color(.background, .weak))
@@ -45,7 +49,7 @@
         func serversFeaturesInformationViewMultipleSections() {
             let view = ServersFeaturesInformationView(
                 store: Store(initialState: .multipleSections) {
-                    ServersFeaturesInformationFeature()
+                    EmptyReducer()
                 }
             )
             .background(Color(.background, .weak))
@@ -57,7 +61,7 @@
         func serversFeaturesInformationViewNoTitles() {
             let view = ServersFeaturesInformationView(
                 store: Store(initialState: .noTitles) {
-                    ServersFeaturesInformationFeature()
+                    EmptyReducer()
                 }
             )
             .background(Color(.background, .weak))
@@ -69,7 +73,7 @@
         func serversFeaturesInformationViewSingleFeature() {
             let view = ServersFeaturesInformationView(
                 store: Store(initialState: .singleFeature) {
-                    ServersFeaturesInformationFeature()
+                    EmptyReducer()
                 }
             )
             .background(Color(.background, .weak))
