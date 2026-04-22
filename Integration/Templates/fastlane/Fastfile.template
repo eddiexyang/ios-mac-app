@@ -75,7 +75,9 @@ end
         # Never upload Debug builds to TestFlight - they'll get rejected anyway.
         $options.delete(:appstore_action)
 
+        {% if channel == "alpha" %}
         $options[:appetize] = true unless $options.key?(:appetize)
+        {% endif %}
     end
 
     {% endif %}
