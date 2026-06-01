@@ -37,7 +37,6 @@ local base = new Train {
         ci = if (read?("env:CI") == "true") new PipelineProperties {
             userProperties = new Mapping {
                 ["readOnlyProvisioning"] = if (read?("env:MATCH_REPROVISION") == "true") "false" else "true"
-                ["pipelineHosts"] = "ci-vilnius-6" // for now, vilnius-1 is only used for macOS builds/tests.
             }
         } else null
 
@@ -217,7 +216,7 @@ local ios = (base) {
             if (base.releaseChannel == "alpha") read?("env:SLACK_BUILDS_URL") else
             read?("env:SLACK_RELEASE_URL")
 
-        languages = "en-US,ar-SA,ca,cs,da,de-DE,el,en-GB,es-ES,es-MX,fi,fr-CA,fr-FR,hu,id,it,ja,ko,nl-NL,no,pl,pt-BR,pt-PT,ro,ru,sk,sv,tr,uk,vi,zh-Hans,zh-Hant"
+        languages = read?("env:APPSTORE_DIST_LANGUAGES") ?? ""
     }
 }
 
