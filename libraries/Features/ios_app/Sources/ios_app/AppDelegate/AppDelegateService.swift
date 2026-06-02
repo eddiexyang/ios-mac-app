@@ -225,7 +225,6 @@ public final class AppDelegateService: AppDelegateProtocol {
     }
 
     public func performAction(for shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
-        @Dependency(\.recentsStorage) var recentsStorage
         let intent: (any AppIntent)? = switch shortcutItem.type {
         case ShortcutItem.connect.type:
             WidgetIntents.ConnectToVPNIntent()
@@ -241,8 +240,16 @@ public final class AppDelegateService: AppDelegateProtocol {
             return
         }
         Task {
-            let result = try await intent.perform().value as? Bool
-            completionHandler(result ?? false)
+            do {
+                let result = try await intent.perform().value as? Bool
+                completionHandler(result ?? false)
+            } catch {
+                log.error("Shortcut action failed", category: .app, metadata: [
+                    "type": "\(shortcutItem.type)",
+                    "error": "\(error)",
+                ])
+                completionHandler(false)
+            }
         }
     }
 
