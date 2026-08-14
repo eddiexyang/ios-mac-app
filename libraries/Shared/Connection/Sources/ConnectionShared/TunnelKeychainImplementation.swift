@@ -38,6 +38,66 @@ public enum TunnelKeychainImplementationError: Error {
     case invalidDataFormatRetrievedFromKeychain
 }
 
+#if os(macOS)
+    private final class Socks5TunnelJSONStore: @unchecked Sendable {
+        private struct Contents: Codable {
+            var wireguardConfiguration: Data?
+        }
+
+        static let shared = Socks5TunnelJSONStore()
+
+        private let lock = NSLock()
+        private let directoryURL: URL
+        private let fileURL: URL
+
+        private init() {
+            let applicationSupportURL = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support", isDirectory: true)
+            self.directoryURL = applicationSupportURL
+                .appendingPathComponent("ProtonVPN-SOCKS5", isDirectory: true)
+            self.fileURL = directoryURL.appendingPathComponent("tunnel.json")
+        }
+
+        func load() throws -> Data? {
+            lock.lock()
+            defer { lock.unlock() }
+
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+            return try JSONDecoder().decode(Contents.self, from: Data(contentsOf: fileURL))
+                .wireguardConfiguration
+        }
+
+        func store(_ data: Data) throws {
+            lock.lock()
+            defer { lock.unlock() }
+
+            try FileManager.default.createDirectory(
+                at: directoryURL,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(Contents(wireguardConfiguration: data)).write(to: fileURL, options: .atomic)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: fileURL.path
+            )
+        }
+
+        func clear() throws {
+            lock.lock()
+            defer { lock.unlock() }
+
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+            try FileManager.default.removeItem(at: fileURL)
+        }
+    }
+#endif
+
 public struct TunnelKeychainImplementation {
     private enum StorageKey {
         static let wireguardSettings = "ProtonVPN_wg_settings"
@@ -48,16 +108,29 @@ public struct TunnelKeychainImplementation {
     public init() {}
 
     public func store(_ configData: Data) throws -> Data {
+        #if os(macOS)
+            try Socks5TunnelJSONStore.shared.store(configData)
+            return configData
+        #else
         try setPassword(configData, forKey: StorageKey.wireguardSettings)
         return try fetchWireguardConfigurationReference()
+        #endif
     }
 
     public func loadWireguardConfig() throws -> Data? {
+        #if os(macOS)
+            try Socks5TunnelJSONStore.shared.load()
+        #else
         try getPasswordData(forKey: StorageKey.wireguardSettings)
+        #endif
     }
 
     public func clear() throws {
+        #if os(macOS)
+            try Socks5TunnelJSONStore.shared.clear()
+        #else
         try clearPassword(forKey: StorageKey.wireguardSettings)
+        #endif
     }
 
     // Password is set and retrieved without using the library because NEVPNProtocol requires it to be

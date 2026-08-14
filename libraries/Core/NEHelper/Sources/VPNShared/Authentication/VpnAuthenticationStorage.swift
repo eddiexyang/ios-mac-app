@@ -102,8 +102,8 @@ extension VpnAuthenticationStorage: DependencyKey {
         @Dependency(\.storage) var storage
 
         #if os(macOS)
-            // The SOCKS5 build has no Network Extension to share credentials
-            // with and is ad-hoc signed without a shared keychain entitlement.
+            // The SOCKS5 build keeps credentials in the local JSON store provided
+            // by KeychainActor and never requests access to the system Keychain.
             let appKeychain = KeychainActor()
         #else
             @Dependency(\.vpnAuthenticationStorageConfig) var accessGroup

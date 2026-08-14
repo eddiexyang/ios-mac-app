@@ -207,15 +207,8 @@ extension AuthKeychain: AuthKeychainHandle {
                 try keychain.set(data, key: key)
             } catch let error2 {
                 #if os(macOS)
-                    log.error("Keychain (auth) write error: \(error2). Will lock keychain to try to recover from this error.", category: .keychain, metadata: ["error": "\(error2)"])
-                    do { // Last chance. Locking/unlocking keychain sometimes helps.
-                        SecKeychainLock(nil)
-                        let data = try JSONEncoder().encode(credentials)
-                        try keychain.set(data, key: key)
-                    } catch let error3 {
-                        log.error("Keychain (auth) write error. Giving up.", category: .keychain, metadata: ["error": "\(error3)"])
-                        throw error3
-                    }
+                    log.error("Credential file write error. Giving up.", category: .keychain, metadata: ["error": "\(error2)"])
+                    throw error2
                 #else
                     log.error("Keychain (auth) write error. Giving up.", category: .keychain, metadata: ["error": "\(error2)"])
                     throw error2
