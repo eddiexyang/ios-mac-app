@@ -88,17 +88,35 @@ jobs:
           codesign --verify --deep --strict --verbose=4 \
             "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
 
-      - name: Package ad-hoc signed app
+      - name: Package ad-hoc signed disk image
         run: |
-          ditto -c -k --sequesterRsrc --keepParent \
+          mkdir -p "$RUNNER_TEMP/ProtonVPN-SOCKS5-dmg"
+          ditto \
             "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app" \
-            "$RUNNER_TEMP/ProtonVPN-SOCKS5-adhoc.zip"
+            "$RUNNER_TEMP/ProtonVPN-SOCKS5-dmg/ProtonVPN.app"
+          hdiutil create \
+            -volname "ProtonVPN SOCKS5" \
+            -srcfolder "$RUNNER_TEMP/ProtonVPN-SOCKS5-dmg" \
+            -format UDZO \
+            -ov \
+            "$RUNNER_TEMP/ProtonVPN-SOCKS5.dmg"
+          hdiutil verify "$RUNNER_TEMP/ProtonVPN-SOCKS5.dmg"
+          mkdir -p "$RUNNER_TEMP/ProtonVPN-SOCKS5-mount"
+          hdiutil attach \
+            "$RUNNER_TEMP/ProtonVPN-SOCKS5.dmg" \
+            -mountpoint "$RUNNER_TEMP/ProtonVPN-SOCKS5-mount" \
+            -nobrowse \
+            -readonly
+          codesign --verify --deep --strict --verbose=4 \
+            "$RUNNER_TEMP/ProtonVPN-SOCKS5-mount/ProtonVPN.app"
+          hdiutil detach "$RUNNER_TEMP/ProtonVPN-SOCKS5-mount"
 
       - name: Upload app
         uses: actions/upload-artifact@v4
         with:
-          name: ProtonVPN-SOCKS5-adhoc
-          path: ${{ runner.temp }}/ProtonVPN-SOCKS5-adhoc.zip
+          name: ProtonVPN-SOCKS5-macOS
+          path: ${{ runner.temp }}/ProtonVPN-SOCKS5.dmg
+          compression-level: 0
           if-no-files-found: error
 
       - name: Upload Xcode log
