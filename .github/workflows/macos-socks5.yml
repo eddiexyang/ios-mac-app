@@ -81,8 +81,66 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build | tee "$RUNNER_TEMP/xcodebuild.log"
 
+      - name: Build and embed userspace SOCKS5 helper
+        run: |
+          set -euo pipefail
+          WG_LIBRARY_DIR="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug"
+          HELPER_BUILD_DIR="$RUNNER_TEMP/ProtonSocksHelperBuild"
+          APP_PATH="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+
+          test -f "$WG_LIBRARY_DIR/libwg-go.a"
+          swift build \
+            --package-path libraries/Core/ProtonSocks \
+            --product ProtonSocksHelper \
+            --configuration release \
+            --scratch-path "$HELPER_BUILD_DIR" \
+            -Xlinker -L"$WG_LIBRARY_DIR"
+
+          HELPER_BIN_DIR="$(swift build \
+            --package-path libraries/Core/ProtonSocks \
+            --configuration release \
+            --scratch-path "$HELPER_BUILD_DIR" \
+            --show-bin-path)"
+          mkdir -p "$APP_PATH/Contents/Helpers"
+          ditto \
+            "$HELPER_BIN_DIR/ProtonSocksHelper" \
+            "$APP_PATH/Contents/Helpers/ProtonSocksHelper"
+          test -x "$APP_PATH/Contents/Helpers/ProtonSocksHelper"
+
+          HELPER_RESPONSE="$(printf '%s\n' \
+            '{"id":"01A000AF-6F71-7FC3-9AF2-C5416122C122","command":"ping"}' \
+            | "$APP_PATH/Contents/Helpers/ProtonSocksHelper")"
+          printf '%s\n' "$HELPER_RESPONSE" | grep -q '"success":true'
+
+      - name: Verify Go runtime process isolation
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+          MAIN_IMAGE="$APP_PATH/Contents/MacOS/ProtonVPN"
+          HELPER_IMAGE="$APP_PATH/Contents/Helpers/ProtonSocksHelper"
+          if test -f "$APP_PATH/Contents/MacOS/ProtonVPN.debug.dylib"; then
+            MAIN_IMAGE="$APP_PATH/Contents/MacOS/ProtonVPN.debug.dylib"
+          fi
+
+          test "$(nm "$MAIN_IMAGE" | grep -c '_go:buildinfo$')" -eq 1
+          test "$(nm "$MAIN_IMAGE" | grep -c '_runtime.raise_trampoline.abi0$')" -eq 1
+          if grep -aFq 'golang.zx2c4.com/wireguard/apple' "$MAIN_IMAGE"; then
+            echo 'WireGuard Go is still linked into the main app process' >&2
+            exit 1
+          fi
+
+          test "$(nm "$HELPER_IMAGE" | grep -c '_go:buildinfo$')" -eq 1
+          test "$(nm "$HELPER_IMAGE" | grep -c '_runtime.raise_trampoline.abi0$')" -eq 1
+          grep -aFq 'golang.zx2c4.com/wireguard/apple' "$HELPER_IMAGE"
+          if otool -L "$HELPER_IMAGE" | grep -Fq 'NetworkExtension.framework'; then
+            echo 'The SOCKS5 helper still links NetworkExtension.framework' >&2
+            exit 1
+          fi
+
       - name: Ad-hoc sign app for local execution
         run: |
+          codesign --force --sign - --timestamp=none \
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app/Contents/Helpers/ProtonSocksHelper"
           codesign --force --deep --sign - --timestamp=none \
             "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
           codesign --verify --deep --strict --verbose=4 \

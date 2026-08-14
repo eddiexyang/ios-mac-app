@@ -33,8 +33,7 @@ import VPNAppCore
 import VPNShared
 
 #if os(macOS)
-    import Network
-    import WireGuardKit
+    import ProtonSocksIPC
 #endif
 
 public protocol VpnManagerProtocol {
@@ -119,13 +118,8 @@ public final class VpnManager: VpnManagerProtocol {
         private var plutoniumUpdateTask: Task<Void, Never>?
         var portForwardingObserverTask: Task<Void, Never>?
 
-        private lazy var wireGuardSocksAdapter = WireGuardSocksAdapter { level, message in
-            switch level {
-            case .verbose:
-                log.debug("\(message)", category: .connection)
-            case .error:
-                log.error("\(message)", category: .connection)
-            }
+        private lazy var protonSocksHelper = ProtonSocksHelperClient { message in
+            log.debug("\(message)", category: .connection)
         }
 
         private var socksConfiguration: VpnManagerConfiguration?
@@ -506,69 +500,65 @@ public final class VpnManager: VpnManagerProtocol {
     // MARK: - Connecting
 
     #if os(macOS)
-        private func makeSocksTunnelConfiguration(
+        private func makeSocksConfiguration(
             _ configuration: VpnManagerConfiguration
-        ) throws -> WireGuardKit.TunnelConfiguration {
-            guard let privateKeyString = configuration.clientPrivateKey,
-                  let privateKey = WireGuardKit.PrivateKey(base64Key: privateKeyString) else {
+        ) throws -> ProtonSocksConfiguration {
+            guard let privateKey = configuration.clientPrivateKey, !privateKey.isEmpty else {
                 throw ProtonSocksConfigurationError.missingPrivateKey
             }
-            guard let publicKeyString = configuration.serverPublicKey,
-                  let publicKey = WireGuardKit.PublicKey(base64Key: publicKeyString) else {
+            guard let publicKey = configuration.serverPublicKey, !publicKey.isEmpty else {
                 throw ProtonSocksConfigurationError.missingServerPublicKey
             }
-            guard let tunnelAddress = IPAddressRange(from: propertiesManager.wireguardConfig.address) else {
+            let wireGuardConfiguration = propertiesManager.wireguardConfig
+            guard !wireGuardConfiguration.address.isEmpty else {
                 throw ProtonSocksConfigurationError.invalidTunnelAddress
             }
-            guard let allowedIPs = IPAddressRange(from: propertiesManager.wireguardConfig.allowedIPs) else {
+            guard !wireGuardConfiguration.allowedIPs.isEmpty else {
                 throw ProtonSocksConfigurationError.invalidAllowedIPs
             }
-            guard let portValue = configuration.ports.first.flatMap(UInt16.init(exactly:)),
-                  let endpointPort = NWEndpoint.Port(rawValue: portValue) else {
+            guard let endpointPort = configuration.ports.first.flatMap(UInt16.init(exactly:)) else {
+                throw ProtonSocksConfigurationError.invalidEndpoint
+            }
+            let dnsServers = wireGuardConfiguration.dnsServers ?? ["10.2.0.1"]
+            guard !dnsServers.isEmpty else {
+                throw ProtonSocksConfigurationError.missingDNSServer
+            }
+            guard case let .wireGuard(transport) = configuration.vpnProtocol else {
                 throw ProtonSocksConfigurationError.invalidEndpoint
             }
 
-            var interface = InterfaceConfiguration(privateKey: privateKey)
-            interface.addresses = [tunnelAddress]
-            interface.dns = (propertiesManager.wireguardConfig.dnsServers ?? ["10.2.0.1"])
-                .compactMap(DNSServer.init(from:))
-            guard !interface.dns.isEmpty else {
-                throw ProtonSocksConfigurationError.missingDNSServer
-            }
-
-            var peer = PeerConfiguration(publicKey: publicKey)
-            peer.allowedIPs = [allowedIPs]
-            peer.endpoint = Endpoint(
-                host: NWEndpoint.Host(configuration.entryServerAddress),
-                port: endpointPort
+            return ProtonSocksConfiguration(
+                privateKey: privateKey,
+                serverPublicKey: publicKey,
+                tunnelAddress: wireGuardConfiguration.address,
+                allowedIPs: wireGuardConfiguration.allowedIPs,
+                dnsServers: dnsServers,
+                endpointHost: configuration.entryServerAddress,
+                endpointPort: endpointPort,
+                persistentKeepAlive: UInt16(exactly: wireGuardConfiguration.persistentKeepalive ?? 0),
+                listenAddress: ProtonSocksSettings.listenAddress,
+                socketType: transport.rawValue
             )
-            peer.persistentKeepAlive = UInt16(exactly: propertiesManager.wireguardConfig.persistentKeepalive ?? 0)
-
-            return WireGuardKit.TunnelConfiguration(name: nil, interface: interface, peers: [peer])
         }
 
         private func startSocksConnection(
             _ configuration: VpnManagerConfiguration,
             completion: @escaping () -> Void
         ) {
-            guard case let .wireGuard(transport) = configuration.vpnProtocol else {
+            guard case .wireGuard = configuration.vpnProtocol else {
                 state = .error(ProtonSocksConfigurationError.invalidEndpoint)
                 stateChanged?()
                 return
             }
 
             do {
-                let tunnelConfiguration = try makeSocksTunnelConfiguration(configuration)
+                let socksHelperConfiguration = try makeSocksConfiguration(configuration)
                 let descriptor = ServerDescriptor(username: configuration.username, address: configuration.entryServerAddress)
                 socksConfiguration = configuration
                 state = .connecting(descriptor)
                 stateChanged?()
 
-                wireGuardSocksAdapter.start(
-                    tunnelConfiguration: tunnelConfiguration,
-                    listenAddress: ProtonSocksSettings.listenAddress,
-                    socketType: transport.rawValue
-                ) { [weak self] error in
+                protonSocksHelper.start(configuration: socksHelperConfiguration) { [weak self] error in
                     guard let self else { return }
                     connectionQueue.async {
                         guard self.socksConfiguration?.id == configuration.id else { return }
@@ -597,13 +587,13 @@ public final class VpnManager: VpnManagerProtocol {
             completion: @escaping () -> Void
         ) {
             do {
-                let tunnelConfiguration = try makeSocksTunnelConfiguration(configuration)
+                let socksHelperConfiguration = try makeSocksConfiguration(configuration)
                 let descriptor = ServerDescriptor(username: configuration.username, address: configuration.entryServerAddress)
                 socksConfiguration = configuration
                 state = .connecting(descriptor)
                 stateChanged?()
 
-                wireGuardSocksAdapter.update(tunnelConfiguration: tunnelConfiguration) { [weak self] error in
+                protonSocksHelper.update(configuration: socksHelperConfiguration) { [weak self] error in
                     guard let self else { return }
                     connectionQueue.async {
                         guard self.socksConfiguration?.id == configuration.id else { return }
@@ -812,7 +802,7 @@ public final class VpnManager: VpnManagerProtocol {
                 state = .disconnecting(descriptor)
                 stateChanged?()
 
-                wireGuardSocksAdapter.stop { [weak self] error in
+                protonSocksHelper.stop { [weak self] error in
                     guard let self else { return }
                     connectionQueue.async {
                         self.socksConfiguration = nil

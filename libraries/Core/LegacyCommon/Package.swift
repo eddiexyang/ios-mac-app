@@ -34,10 +34,10 @@ let package = Package(
     dependencies: [
         // External packages regularly upstreamed by our project (imported as submodules)
         .package(path: "../../../external/protoncore"),
-        .package(name: "WireGuardKit", path: "../../../external/wireguard-apple"),
 
         // Local packages
         .package(path: "../NEHelper"),
+        .package(name: "ProtonSocks", path: "../ProtonSocks"),
 
         .package(path: "../../Foundations/Domain"),
         .package(path: "../../Foundations/Ergonomics"),
@@ -94,7 +94,7 @@ let package = Package(
                 .product(name: "VPNAppCore", package: "NEHelper"),
                 .product(name: "VPNCrypto", package: "NEHelper"),
                 .product(name: "NATPMPUI", package: "NATPortMapping", condition: .when(platforms: [.macOS])),
-                .product(name: "WireGuardKit", package: "WireGuardKit", condition: .when(platforms: [.macOS])),
+                .product(name: "ProtonSocksIPC", package: "ProtonSocks", condition: .when(platforms: [.macOS])),
 
                 "NetShield",
                 "Settings",
