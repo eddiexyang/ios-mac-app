@@ -514,7 +514,8 @@ public final class VpnManager: VpnManagerProtocol {
             guard let allowedIPs = IPAddressRange(from: propertiesManager.wireguardConfig.allowedIPs) else {
                 throw ProtonSocksConfigurationError.invalidAllowedIPs
             }
-            guard let portValue = configuration.ports.first.flatMap(UInt16.init(exactly:)) else {
+            guard let portValue = configuration.ports.first.flatMap(UInt16.init(exactly:)),
+                  let endpointPort = NWEndpoint.Port(rawValue: portValue) else {
                 throw ProtonSocksConfigurationError.invalidEndpoint
             }
 
@@ -530,7 +531,7 @@ public final class VpnManager: VpnManagerProtocol {
             peer.allowedIPs = [allowedIPs]
             peer.endpoint = Endpoint(
                 host: NWEndpoint.Host(configuration.entryServerAddress),
-                port: NWEndpoint.Port(rawValue: portValue)
+                port: endpointPort
             )
             peer.persistentKeepAlive = UInt16(exactly: propertiesManager.wireguardConfig.persistentKeepalive ?? 0)
 
@@ -955,7 +956,7 @@ public final class VpnManager: VpnManagerProtocol {
         log.info("VPN update state to \(state.logDescription)", category: .connection, event: .change, metadata: [
             "oldState": "\(oldState.logDescription)",
             "state": "\(newState.logDescription)",
-            "currentProtocol": "\(optional: currentVpnProtocol)",
+            "currentProtocol": currentVpnProtocol.map { String(describing: $0) } ?? "nil",
         ])
 
         #if os(macOS)

@@ -53,6 +53,8 @@ jobs:
         run: |
           cp apps/macos/ProtonVPN/ObfuscatedConstants.example.swift apps/macos/ProtonVPN/ObfuscatedConstants.swift
           cp apps/macos/ProtonVPN/ObfuscatedConstants.example.swift libraries/Features/Settings/Sources/SettingsShared/ObfuscatedConstants.swift
+          cp apps/macos/ProtonVPN/ObfuscatedConstants.example.swift libraries/Core/LegacyCommon/Sources/LegacyCommon/ObfuscatedConstants.swift
+          cp apps/macos/ProtonVPN/ObfuscatedConstants.example.swift libraries/Features/Home/Sources/HomeShared/ObfuscatedConstants.swift
 
       - name: Resolve Swift packages
         run: |
