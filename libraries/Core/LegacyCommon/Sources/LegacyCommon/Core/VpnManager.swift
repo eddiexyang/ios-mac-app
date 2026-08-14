@@ -122,9 +122,9 @@ public final class VpnManager: VpnManagerProtocol {
         private lazy var wireGuardSocksAdapter = WireGuardSocksAdapter { level, message in
             switch level {
             case .verbose:
-                log.debug(message, category: .connection)
+                log.debug("\(message)", category: .connection)
             case .error:
-                log.error(message, category: .connection)
+                log.error("\(message)", category: .connection)
             }
         }
 
