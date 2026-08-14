@@ -27,11 +27,9 @@ jobs:
       - name: Check out public submodules
         run: |
           git config submodule.external/protoncore.url https://github.com/ProtonMail/protoncore_ios.git
-          git config submodule.external/apple-fusion.url https://github.com/ProtonMail/apple-fusion.git
           git config submodule.external/wireguard-apple.url https://github.com/ProtonVPN/wireguard-apple.git
           git submodule update --init --depth 1 \
             external/protoncore \
-            external/apple-fusion \
             external/wireguard-apple
 
       - name: Apply WireGuard SOCKS5 patch
@@ -59,14 +57,14 @@ jobs:
           git config --global url.https://github.com/ProtonMail/apple-fusion.git.insteadOf git@gitlab.protontech.ch:tpe/apple-fusion.git
           xcodebuild \
             -resolvePackageDependencies \
-            -workspace ProtonVPN.xcworkspace \
+            -workspace ProtonVPN-SOCKS5.xcworkspace \
             -scheme ProtonVPN-macOS
 
       - name: Build Proton VPN for macOS
         run: |
           set -o pipefail
           xcodebuild \
-            -workspace ProtonVPN.xcworkspace \
+            -workspace ProtonVPN-SOCKS5.xcworkspace \
             -scheme ProtonVPN-macOS \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \

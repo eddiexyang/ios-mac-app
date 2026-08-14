@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <Group
+      location = "container:"
+      name = "Libraries">
+      <Group
+         location = "container:"
+         name = "External">
+         <FileRef
+            location = "group:external/wireguard-apple">
+         </FileRef>
+         <FileRef
+            location = "group:external/protoncore">
+         </FileRef>
+      </Group>
+      <Group
+         location = "container:"
+         name = "Foundations">
+         <FileRef
+            location = "group:libraries/Foundations/Domain">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Foundations/Ergonomics">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Foundations/PMLogger">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Foundations/Strings">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Foundations/Theme">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Foundations/Timer">
+         </FileRef>
+      </Group>
+      <Group
+         location = "container:"
+         name = "Shared">
+         <FileRef
+            location = "group:libraries/Shared/CommonNetworking">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/VPNNetworking">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/Connection">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/ConnectionInventory">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/ExtensionIPC">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/Localization">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/NATPortMapping">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/Persistence">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/WidgetIntents">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Shared/Telemetry">
+         </FileRef>
+      </Group>
+      <Group
+         location = "container:"
+         name = "Core">
+         <FileRef
+            location = "group:libraries/Core/LegacyCommon">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Core/NEHelper">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Core/SharedViews">
+         </FileRef>
+      </Group>
+      <Group
+         location = "container:"
+         name = "Features">
+         <FileRef
+            location = "group:libraries/Features/Announcement">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/BugReport">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/ConnectionDetails">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/ConnectWidget">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/Countries">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/Home">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/Modals">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/NetShield">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/Payments">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/Review">
+         </FileRef>
+         <FileRef
+            location = "group:libraries/Features/Settings">
+         </FileRef>
+      </Group>
+   </Group>
+   <FileRef
+      location = "group:apps/macos/macOS.xcodeproj">
+   </FileRef>
+</Workspace>

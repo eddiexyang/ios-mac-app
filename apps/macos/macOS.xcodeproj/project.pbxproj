@@ -2740,14 +2740,11 @@
 				EE8CA7AE1F06F8BB00BA829F /* Copy Starter */,
 				E17DE11E21FF387D008CCC13 /* Copy Network Helper */,
 				D5479534228D9BDB00639216 /* Run SwiftLint Script */,
-				42EF09E7257A713F00E2EDCA /* Embed System Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				E976592626A856EA00E0983B /* PBXTargetDependency */,
-				EBB751CC2DA7D4C900F79994 /* PBXTargetDependency */,
-				6640FF492ED5B24C004A4A9A /* PBXTargetDependency */,
+				E93D022D26A1C7D40098520D /* PBXTargetDependency */,
 			);
 			name = "ProtonVPN-mac";
 			packageProductDependencies = (
