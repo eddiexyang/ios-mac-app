@@ -160,7 +160,13 @@ public final class VpnManager: VpnManagerProtocol {
         }
     }
 
-    public private(set) var state: VpnState = .invalid
+    public private(set) var state: VpnState = .invalid {
+        didSet {
+            #if os(macOS)
+                ProtonSocksRuntimeState.shared.state = state
+            #endif
+        }
+    }
 
     public var prepareManagersTask: Task<Void, Never>?
 
@@ -339,6 +345,11 @@ public final class VpnManager: VpnManagerProtocol {
     }
 
     public func removeConfigurations(completionHandler: ((Error?) -> Void)? = nil) {
+        #if os(macOS)
+            completionHandler?(nil)
+            return
+        #endif
+
         let dispatchGroup = DispatchGroup()
         var error: Error?
         var successful = false // mark as success if at least one removal succeeded
@@ -396,11 +407,10 @@ public final class VpnManager: VpnManagerProtocol {
 
     public func connectedDate() async -> Date? {
         #if os(macOS)
-            if socksConfiguration != nil {
-                return socksConnectedDate
-            }
+            return socksConnectedDate
         #endif
 
+        #if !os(macOS)
         guard let currentVpnProtocolFactory else {
             return nil
         }
@@ -414,14 +424,13 @@ public final class VpnManager: VpnManagerProtocol {
             log.debug("Couldn't retrieve vpnProviderManager \(error)", category: .connection)
         }
         return nil
+        #endif
     }
 
     public func refreshState() {
         #if os(macOS)
-            if socksConfiguration != nil {
-                stateChanged?()
-                return
-            }
+            stateChanged?()
+            return
         #endif
 
         setState()
@@ -903,9 +912,13 @@ public final class VpnManager: VpnManagerProtocol {
         }
 
         #if os(macOS)
-            if socksConfiguration != nil {
-                return
+            if socksConfiguration == nil, state != .disconnected {
+                state = .disconnected
+                disconnectCompletion?()
+                disconnectCompletion = nil
+                stateChanged?()
             }
+            return
         #endif
 
         guard let vpnProtocol = currentVpnProtocol else {
@@ -1032,6 +1045,12 @@ public final class VpnManager: VpnManagerProtocol {
      *  to be loaded in order for storing of further configurations to work.
      */
     private func prepareManagers(forSetup _: Bool = false) {
+        #if os(macOS)
+            currentVpnProtocol = .wireGuard(.udp)
+            setState()
+            return
+        #endif
+
         vpnStateConfiguration.determineActiveVpnProtocolSync(defaultToIke: true) { [weak self] vpnProtocol in
             guard let self else {
                 return
@@ -1056,6 +1075,12 @@ public final class VpnManager: VpnManagerProtocol {
 
     @MainActor
     private func prepareManagers() async {
+        #if os(macOS)
+            currentVpnProtocol = .wireGuard(.udp)
+            setState()
+            return
+        #endif
+
         let vpnProtocol = await vpnStateConfiguration.determineActiveVpnProtocol(defaultToIke: true)
 
         currentVpnProtocol = vpnProtocol

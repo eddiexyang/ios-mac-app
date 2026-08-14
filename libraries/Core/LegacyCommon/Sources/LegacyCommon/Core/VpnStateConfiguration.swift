@@ -104,6 +104,11 @@ public enum VpnStateConfigurationKey: DependencyKey {
 
         @Sendable
         func determineActiveVpnStateSync(vpnProtocol: VpnProtocol, completion: @escaping ((Result<(NEVPNManagerWrapper, VpnState), Error>) -> Void)) {
+            #if os(macOS)
+                completion(.failure(VpnStateConfigurationError.managerUnavailable))
+                return
+            #endif
+
             getFactory(for: vpnProtocol).vpnProviderManager(for: .status) { vpnManager, error in
                 if let error {
                     completion(.failure(VpnStateConfigurationError.managerRetrievalFailed))
@@ -124,12 +129,23 @@ public enum VpnStateConfigurationKey: DependencyKey {
             NEVPNManagerWrapper,
             VpnState
         ) {
+            #if os(macOS)
+                throw VpnStateConfigurationError.managerUnavailable
+            #else
             let vpnManager = try await getFactory(for: vpnProtocol).vpnProviderManager(for: .status)
             return (vpnManager, determineNewState(vpnManager: vpnManager))
+            #endif
         }
 
         @Sendable
         func determineActiveVpnProtocolSync(defaultToIke: Bool, completion: @escaping (@MainActor (VpnProtocol?) -> Void)) {
+            #if os(macOS)
+                Task { @MainActor in
+                    completion(.wireGuard(.udp))
+                }
+                return
+            #endif
+
             let protocols: [VpnProtocol] = [.ike, .wireGuard(.udp)]
             var activeProtocols: [VpnProtocol] = []
 
@@ -178,6 +194,9 @@ public enum VpnStateConfigurationKey: DependencyKey {
 
         @Sendable
         func determineActiveVpnProtocol(defaultToIke: Bool) async -> VpnProtocol? {
+            #if os(macOS)
+                return .wireGuard(.udp)
+            #else
             let protocols: [VpnProtocol] = [.ike, .wireGuard(.udp)]
 
             var activeProtocols: [VpnProtocol] = []
@@ -213,11 +232,21 @@ public enum VpnStateConfigurationKey: DependencyKey {
                 }
                 return nil
             }
+            #endif
         }
 
         @Sendable
         func getInfoSync(completion: @escaping ((VpnStateConfigurationInfo) -> Void)) {
             @Dependency(\.propertiesManager) var propertiesManager
+            #if os(macOS)
+                completion(VpnStateConfigurationInfo(
+                    state: ProtonSocksRuntimeState.shared.state,
+                    hasConnected: propertiesManager.hasConnected,
+                    connection: propertiesManager.lastWireguardConnection
+                ))
+                return
+            #endif
+
             determineActiveVpnProtocolSync(defaultToIke: true) { vpnProtocol in
                 guard let vpnProtocol else {
                     completion(VpnStateConfigurationInfo(
@@ -275,6 +304,13 @@ public enum VpnStateConfigurationKey: DependencyKey {
             },
             getInfo: {
                 @Dependency(\.propertiesManager) var propertiesManager
+                #if os(macOS)
+                    return VpnStateConfigurationInfo(
+                        state: ProtonSocksRuntimeState.shared.state,
+                        hasConnected: propertiesManager.hasConnected,
+                        connection: propertiesManager.lastWireguardConnection
+                    )
+                #else
                 guard let vpnProtocol = await determineActiveVpnProtocol(defaultToIke: true) else {
                     return VpnStateConfigurationInfo(
                         state: .disconnected,
@@ -303,6 +339,7 @@ public enum VpnStateConfigurationKey: DependencyKey {
                         connection: connection
                     )
                 }
+                #endif
             }
         )
     }()

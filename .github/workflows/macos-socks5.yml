@@ -81,17 +81,24 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build | tee "$RUNNER_TEMP/xcodebuild.log"
 
-      - name: Package unsigned app
+      - name: Ad-hoc sign app for local execution
+        run: |
+          codesign --force --deep --sign - --timestamp=none \
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+          codesign --verify --deep --strict --verbose=4 \
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+
+      - name: Package ad-hoc signed app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
             "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app" \
-            "$RUNNER_TEMP/ProtonVPN-SOCKS5-unsigned.zip"
+            "$RUNNER_TEMP/ProtonVPN-SOCKS5-adhoc.zip"
 
       - name: Upload app
         uses: actions/upload-artifact@v4
         with:
-          name: ProtonVPN-SOCKS5-unsigned
-          path: ${{ runner.temp }}/ProtonVPN-SOCKS5-unsigned.zip
+          name: ProtonVPN-SOCKS5-adhoc
+          path: ${{ runner.temp }}/ProtonVPN-SOCKS5-adhoc.zip
           if-no-files-found: error
 
       - name: Upload Xcode log

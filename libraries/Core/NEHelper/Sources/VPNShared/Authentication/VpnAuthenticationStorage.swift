@@ -98,11 +98,17 @@ public enum VPNAuthenticationStorageConfigKey: DependencyKey {
 
 extension VpnAuthenticationStorage: DependencyKey {
     public static let liveValue: Self = {
-        @Dependency(\.vpnAuthenticationStorageConfig) var accessGroup
         @Dependency(\.vpnKeysGenerator) var vpnKeysGenerator
         @Dependency(\.storage) var storage
 
-        let appKeychain = KeychainActor(accessGroup: accessGroup)
+        #if os(macOS)
+            // The SOCKS5 build has no Network Extension to share credentials
+            // with and is ad-hoc signed without a shared keychain entitlement.
+            let appKeychain = KeychainActor()
+        #else
+            @Dependency(\.vpnAuthenticationStorageConfig) var accessGroup
+            let appKeychain = KeychainActor(accessGroup: accessGroup)
+        #endif
         let (stream, continuation) = AsyncStream.makeStream(of: VpnAuthenticationStorageEvent.self)
 
         let deleteCertificateImpl: @Sendable () -> Void = {
