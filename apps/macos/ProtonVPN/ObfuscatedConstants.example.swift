@@ -40,6 +40,8 @@ class ObfuscatedConstants {
 
     static let apiHost: String = ""
     static let humanVerificationV3Host = ""
+    static let btiAPIHost = ""
+    static let blackAPIHost = ""
 
     static let vpnIAPIdentifiers: Set<String> = []
 }
