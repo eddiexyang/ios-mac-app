@@ -66,6 +66,7 @@ jobs:
           xcodebuild \
             -workspace ProtonVPN-SOCKS5.xcworkspace \
             -scheme ProtonVPN-macOS \
+            -skipMacroValidation \
             -configuration Debug \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath "$RUNNER_TEMP/ProtonVPNDerivedData" \
