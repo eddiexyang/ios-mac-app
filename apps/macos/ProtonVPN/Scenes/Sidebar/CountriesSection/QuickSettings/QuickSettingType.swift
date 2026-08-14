@@ -33,7 +33,7 @@ enum QuickSettingType: CaseIterable, Hashable {
         case .secureCoreDisplay:
             Localizable.secureCore
         case .netShieldDisplay:
-            Localizable.netshieldTitle
+            "SOCKS5 Port"
         case .killSwitchDisplay:
             Localizable.killSwitch
         case .portForwardingDisplay:
@@ -46,7 +46,7 @@ enum QuickSettingType: CaseIterable, Hashable {
         case .secureCoreDisplay:
             Localizable.quickSettingsSecureCoreDescription
         case .netShieldDisplay:
-            Localizable.quickSettingsNetShieldDescription
+            "Proton listens on loopback and sends traffic through the selected Proton server."
         case .killSwitchDisplay:
             Localizable.quickSettingsKillSwitchDescription
         case .portForwardingDisplay:
@@ -59,7 +59,7 @@ enum QuickSettingType: CaseIterable, Hashable {
         case .secureCoreDisplay:
             Localizable.quickSettingsSecureCoreNote
         case .netShieldDisplay:
-            Localizable.quickSettingsNetShieldNote
+            "The new port is used after reconnecting Proton."
         case .killSwitchDisplay:
             Localizable.quickSettingsKillSwitchNote
         case .portForwardingDisplay:

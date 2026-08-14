@@ -35,21 +35,10 @@ struct NetShieldQuickSettingFeature {
         var stats: NetShieldModel
 
         var icon: Image {
-            switch type {
-            case .off:
-                Theme.Asset.Icons.shield.swiftUIImage
-            case .level1:
-                Theme.Asset.Icons.shieldHalfFilled.swiftUIImage
-            case .level2:
-                Theme.Asset.Icons.shieldFilled.swiftUIImage
-            case .level3:
-                Theme.Asset.Icons.shieldFilled.swiftUIImage
-            @unknown default:
-                Theme.Asset.Icons.shield.swiftUIImage
-            }
+            Theme.Asset.Icons.arrowsSwitch.swiftUIImage
         }
 
-        let accessibilityIdentifier = "NetShieldButton"
+        let accessibilityIdentifier = "ProtonSocksButton"
 
         var badgeVisible: Bool {
             guard isStatsEnabled, type.shouldMonitorStats() else { return false }
@@ -71,7 +60,7 @@ struct NetShieldQuickSettingFeature {
         }
 
         var isEnabled: Bool {
-            type != .off
+            true
         }
     }
 
@@ -88,34 +77,20 @@ struct NetShieldQuickSettingFeature {
         }
     }
 
-    @Dependency(\.propertiesManager) var propertiesManager
     @Dependency(\.netShieldPropertyProvider) var netShieldPropertyProvider
-
-    private enum CancelID { case netShieldObservations }
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .startObserving:
-                state.type = netShieldPropertyProvider.getNetShieldType()
-                state.isVisible = propertiesManager.featureFlags.netShield
-                state.isStatsEnabled = propertiesManager.featureFlags.netShieldStats
-                return .merge(
-                    .run { send in
-                        let stream: AsyncStream<NetShieldModel> = NotificationCenter.default.notifications(NetShieldStatsNotification.self)
-                        for await stats in stream {
-                            await send(.netShieldStatsUpdated(stats))
-                        }
-                    },
-                    .run { send in
-                        for await _ in netShieldPropertyProvider.netShieldTypeStream() {
-                            await send(.updateNetShield)
-                        }
-                    }
-                ).cancellable(id: CancelID.netShieldObservations)
+                netShieldPropertyProvider.setNetShieldType(.off)
+                state.type = .off
+                state.isVisible = true
+                state.isStatsEnabled = false
+                return .none
             case .updateNetShield:
-                state.type = netShieldPropertyProvider.getNetShieldType()
-                state.isVisible = propertiesManager.featureFlags.netShield
+                state.type = .off
+                state.isVisible = true
                 return .none
             case let .netShieldStatsUpdated(stats):
                 state.stats = stats

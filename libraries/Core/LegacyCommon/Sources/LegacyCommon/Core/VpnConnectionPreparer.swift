@@ -53,7 +53,7 @@ class VpnConnectionPreparer {
 
     func determineServerParametersAndConnect(
         requestId: UUID,
-        with connectionProtocol: ConnectionProtocol,
+        with requestedConnectionProtocol: ConnectionProtocol,
         to server: ServerModel,
         netShieldType: NetShieldType,
         natType: NATType,
@@ -61,6 +61,18 @@ class VpnConnectionPreparer {
         portForwarding: Bool?,
         intent: ConnectionRequestType?
     ) {
+        #if os(macOS)
+            let connectionProtocol: ConnectionProtocol = switch requestedConnectionProtocol {
+            case .smartProtocol, .vpnProtocol(.ike):
+                .vpnProtocol(.wireGuard(.udp))
+            case .vpnProtocol(.wireGuard):
+                requestedConnectionProtocol
+            }
+            let netShieldType = NetShieldType.off
+        #else
+            let connectionProtocol = requestedConnectionProtocol
+        #endif
+
         guard let serverIp = selectServerIp(server: server, connectionProtocol: connectionProtocol) else {
             return
         }

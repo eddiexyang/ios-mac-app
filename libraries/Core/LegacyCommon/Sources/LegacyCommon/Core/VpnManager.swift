@@ -32,6 +32,11 @@ import ProtonCoreFeatureFlags
 import VPNAppCore
 import VPNShared
 
+#if os(macOS)
+    import Network
+    import WireGuardKit
+#endif
+
 public protocol VpnManagerProtocol {
     var stateChanged: (() -> Void)? { get set }
     var state: VpnState { get }
@@ -72,6 +77,28 @@ public protocol VpnManagerFactory {
     func makeVpnManager() -> VpnManagerProtocol
 }
 
+#if os(macOS)
+    private enum ProtonSocksConfigurationError: LocalizedError {
+        case missingPrivateKey
+        case missingServerPublicKey
+        case invalidTunnelAddress
+        case invalidAllowedIPs
+        case invalidEndpoint
+        case missingDNSServer
+
+        var errorDescription: String? {
+            switch self {
+            case .missingPrivateKey: "Missing WireGuard private key"
+            case .missingServerPublicKey: "Missing WireGuard server public key"
+            case .invalidTunnelAddress: "Invalid WireGuard tunnel address"
+            case .invalidAllowedIPs: "Invalid WireGuard allowed IPs"
+            case .invalidEndpoint: "Invalid WireGuard server endpoint"
+            case .missingDNSServer: "Missing WireGuard DNS server"
+            }
+        }
+    }
+#endif
+
 public final class VpnManager: VpnManagerProtocol {
     @Dependency(\.appFeaturePropertyProvider) var featurePropertyProvider
 
@@ -91,6 +118,18 @@ public final class VpnManager: VpnManagerProtocol {
     #if os(macOS)
         private var plutoniumUpdateTask: Task<Void, Never>?
         var portForwardingObserverTask: Task<Void, Never>?
+
+        private lazy var wireGuardSocksAdapter = WireGuardSocksAdapter { level, message in
+            switch level {
+            case .verbose:
+                log.debug(message, category: .connection)
+            case .error:
+                log.error(message, category: .connection)
+            }
+        }
+
+        private var socksConfiguration: VpnManagerConfiguration?
+        private var socksConnectedDate: Date?
     #endif
 
     var currentVpnProtocolFactory: VpnProtocolFactory? {
@@ -227,6 +266,13 @@ public final class VpnManager: VpnManagerProtocol {
     }
 
     public func isOnDemandEnabled(handler: @escaping (Bool) -> Void) {
+        #if os(macOS)
+            if case .wireGuard = currentVpnProtocol {
+                handler(false)
+                return
+            }
+        #endif
+
         guard let currentVpnProtocolFactory else {
             handler(false)
             return
@@ -243,12 +289,31 @@ public final class VpnManager: VpnManagerProtocol {
     }
 
     public func setOnDemand(_ enabled: Bool) {
+        #if os(macOS)
+            if case .wireGuard = currentVpnProtocol {
+                return
+            }
+        #endif
+
         connectionQueue.async { [weak self] in
             self?.setOnDemand(enabled) { _ in }
         }
     }
 
     public func disconnectAnyExistingConnectionAndPrepareToConnect(with configuration: VpnManagerConfiguration, completion: @escaping () -> Void) {
+        #if os(macOS)
+            if let currentConfiguration = socksConfiguration,
+               case let .wireGuard(currentTransport) = currentConfiguration.vpnProtocol,
+               case let .wireGuard(nextTransport) = configuration.vpnProtocol,
+               currentTransport == nextTransport {
+                currentVpnProtocol = configuration.vpnProtocol
+                connectionQueue.async { [weak self] in
+                    self?.updateSocksConnection(configuration, completion: completion)
+                }
+                return
+            }
+        #endif
+
         let pause = state != .disconnected ? 0.2 : 0 // Magical fix for strange crash of go mobile and/or LocagAgent lib + KS
         disconnect { [weak self] in
             self?.currentVpnProtocol = configuration.vpnProtocol
@@ -330,6 +395,12 @@ public final class VpnManager: VpnManagerProtocol {
     }
 
     public func connectedDate() async -> Date? {
+        #if os(macOS)
+            if socksConfiguration != nil {
+                return socksConnectedDate
+            }
+        #endif
+
         guard let currentVpnProtocolFactory else {
             return nil
         }
@@ -346,6 +417,13 @@ public final class VpnManager: VpnManagerProtocol {
     }
 
     public func refreshState() {
+        #if os(macOS)
+            if socksConfiguration != nil {
+                stateChanged?()
+                return
+            }
+        #endif
+
         setState()
     }
 
@@ -418,6 +496,124 @@ public final class VpnManager: VpnManagerProtocol {
 
     // MARK: - Connecting
 
+    #if os(macOS)
+        private func makeSocksTunnelConfiguration(
+            _ configuration: VpnManagerConfiguration
+        ) throws -> WireGuardKit.TunnelConfiguration {
+            guard let privateKeyString = configuration.clientPrivateKey,
+                  let privateKey = WireGuardKit.PrivateKey(base64Key: privateKeyString) else {
+                throw ProtonSocksConfigurationError.missingPrivateKey
+            }
+            guard let publicKeyString = configuration.serverPublicKey,
+                  let publicKey = WireGuardKit.PublicKey(base64Key: publicKeyString) else {
+                throw ProtonSocksConfigurationError.missingServerPublicKey
+            }
+            guard let tunnelAddress = IPAddressRange(from: propertiesManager.wireguardConfig.address) else {
+                throw ProtonSocksConfigurationError.invalidTunnelAddress
+            }
+            guard let allowedIPs = IPAddressRange(from: propertiesManager.wireguardConfig.allowedIPs) else {
+                throw ProtonSocksConfigurationError.invalidAllowedIPs
+            }
+            guard let portValue = configuration.ports.first.flatMap(UInt16.init(exactly:)) else {
+                throw ProtonSocksConfigurationError.invalidEndpoint
+            }
+
+            var interface = InterfaceConfiguration(privateKey: privateKey)
+            interface.addresses = [tunnelAddress]
+            interface.dns = (propertiesManager.wireguardConfig.dnsServers ?? ["10.2.0.1"])
+                .compactMap(DNSServer.init(from:))
+            guard !interface.dns.isEmpty else {
+                throw ProtonSocksConfigurationError.missingDNSServer
+            }
+
+            var peer = PeerConfiguration(publicKey: publicKey)
+            peer.allowedIPs = [allowedIPs]
+            peer.endpoint = Endpoint(
+                host: NWEndpoint.Host(configuration.entryServerAddress),
+                port: NWEndpoint.Port(rawValue: portValue)
+            )
+            peer.persistentKeepAlive = UInt16(exactly: propertiesManager.wireguardConfig.persistentKeepalive ?? 0)
+
+            return WireGuardKit.TunnelConfiguration(name: nil, interface: interface, peers: [peer])
+        }
+
+        private func startSocksConnection(
+            _ configuration: VpnManagerConfiguration,
+            completion: @escaping () -> Void
+        ) {
+            guard case let .wireGuard(transport) = configuration.vpnProtocol else {
+                state = .error(ProtonSocksConfigurationError.invalidEndpoint)
+                stateChanged?()
+                return
+            }
+
+            do {
+                let tunnelConfiguration = try makeSocksTunnelConfiguration(configuration)
+                let descriptor = ServerDescriptor(username: configuration.username, address: configuration.entryServerAddress)
+                socksConfiguration = configuration
+                state = .connecting(descriptor)
+                stateChanged?()
+
+                wireGuardSocksAdapter.start(
+                    tunnelConfiguration: tunnelConfiguration,
+                    listenAddress: ProtonSocksSettings.listenAddress,
+                    socketType: transport.rawValue
+                ) { [weak self] error in
+                    guard let self else { return }
+                    connectionQueue.async {
+                        guard self.socksConfiguration?.id == configuration.id else { return }
+                        if let error {
+                            self.socksConfiguration = nil
+                            self.socksConnectedDate = nil
+                            self.state = .error(error)
+                        } else {
+                            self.socksConnectedDate = Date()
+                            self.state = .connected(descriptor)
+                        }
+                        self.stateChanged?()
+                        completion()
+                    }
+                }
+            } catch {
+                socksConfiguration = nil
+                socksConnectedDate = nil
+                state = .error(error)
+                stateChanged?()
+            }
+        }
+
+        private func updateSocksConnection(
+            _ configuration: VpnManagerConfiguration,
+            completion: @escaping () -> Void
+        ) {
+            do {
+                let tunnelConfiguration = try makeSocksTunnelConfiguration(configuration)
+                let descriptor = ServerDescriptor(username: configuration.username, address: configuration.entryServerAddress)
+                socksConfiguration = configuration
+                state = .connecting(descriptor)
+                stateChanged?()
+
+                wireGuardSocksAdapter.update(tunnelConfiguration: tunnelConfiguration) { [weak self] error in
+                    guard let self else { return }
+                    connectionQueue.async {
+                        guard self.socksConfiguration?.id == configuration.id else { return }
+                        if let error {
+                            self.state = .error(error)
+                        } else {
+                            self.socksConnectedDate = Date()
+                            self.state = .connected(descriptor)
+                        }
+                        self.stateChanged?()
+                        completion()
+                    }
+                }
+            } catch {
+                state = .error(error)
+                stateChanged?()
+            }
+        }
+    #endif
+
     private func prepareConnection(
         forConfiguration configuration: VpnManagerConfiguration,
         completion: @escaping () -> Void
@@ -428,6 +624,13 @@ public final class VpnManager: VpnManagerProtocol {
         }
 
         disconnectLocalAgent()
+
+        #if os(macOS)
+            if case .wireGuard = configuration.vpnProtocol {
+                startSocksConnection(configuration, completion: completion)
+                return
+            }
+        #endif
 
         guard let currentVpnProtocolFactory else {
             return
@@ -592,6 +795,38 @@ public final class VpnManager: VpnManagerProtocol {
         log.info("Closing VPN tunnel", category: .connectionDisconnect)
 
         localAgent?.disconnect()
+
+        #if os(macOS)
+            if let configuration = socksConfiguration {
+                let descriptor = ServerDescriptor(username: configuration.username, address: configuration.entryServerAddress)
+                state = .disconnecting(descriptor)
+                stateChanged?()
+
+                wireGuardSocksAdapter.stop { [weak self] error in
+                    guard let self else { return }
+                    connectionQueue.async {
+                        self.socksConfiguration = nil
+                        self.socksConnectedDate = nil
+                        if let error {
+                            self.state = .error(error)
+                        } else {
+                            self.state = .disconnected
+                        }
+                        self.stateChanged?()
+                        completion()
+                    }
+                }
+                return
+            }
+
+            if case .wireGuard = currentVpnProtocol {
+                state = .disconnected
+                stateChanged?()
+                completion()
+                return
+            }
+        #endif
+
         disconnectCompletion = completion
 
         setOnDemand(false) { vpnManager in
@@ -612,6 +847,12 @@ public final class VpnManager: VpnManagerProtocol {
     // MARK: - Connect on demand
 
     private func setOnDemand(_ enabled: Bool, completion: @escaping (NEVPNManagerWrapper) -> Void) {
+        #if os(macOS)
+            if case .wireGuard = currentVpnProtocol {
+                return
+            }
+        #endif
+
         guard let currentVpnProtocolFactory else {
             return
         }
@@ -659,6 +900,12 @@ public final class VpnManager: VpnManagerProtocol {
             stateChanged?()
             return
         }
+
+        #if os(macOS)
+            if socksConfiguration != nil {
+                return
+            }
+        #endif
 
         guard let vpnProtocol = currentVpnProtocol else {
             return

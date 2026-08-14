@@ -65,7 +65,6 @@ final class LoginViewModel: ObservableObject {
         AppSessionManagerFactory &
         CoreAlertServiceFactory & NavigationServiceFactory &
         ProtonReachabilityCheckerFactory &
-        SystemExtensionManagerFactory &
         UpdateManagerFactory
 
     private let factory: Factory
@@ -84,8 +83,6 @@ final class LoginViewModel: ObservableObject {
         minimumAccountType: AccountType.username,
         ssoCallbackScheme: AppConstants.DeepLinking.deepLinkScheme
     )
-    private lazy var sysexManager: SystemExtensionManager = factory.makeSystemExtensionManager()
-
     var logInInProgress: (() -> Void)?
     var logInFailure: ((String?, Int?) -> Void)?
     var logInFailureWithSupport: ((String?) -> Void)?
@@ -275,28 +272,11 @@ final class LoginViewModel: ObservableObject {
     /// Check sysex installation state. Fall back to IKE if sysex approval is missing but required by current protocol.
     /// - Parameter shouldDefaultToSmartIfPossible: If system extensions are approved, sets default protocol to smart.
     /// - Parameter shouldStartTour: Controls whether the sysex tour is shown, if approval is required.
-    private func checkSysexApprovalAndAdjustProtocol(shouldDefaultToSmartIfPossible: Bool, shouldStartTour: Bool) {
-        let includedExtensionTypes: [SystemExtensionType] = propertiesManager.isSubsequentLaunch ? [.wireGuard] : [.wireGuard, .plutonium]
-        sysexManager.installOrUpdateExtensionsIfNeeded(shouldStartTour: shouldStartTour, includedTypes: includedExtensionTypes) { result, _ in
-            switch result {
-            case let .success(success):
-                if shouldDefaultToSmartIfPossible {
-                    switch success {
-                    case .installed, .upgraded:
-                        self.propertiesManager.smartProtocol = true
-                    case .alreadyThere:
-                        break
-                    }
-                }
-            case .failure:
-                let currentProtocol = self.propertiesManager.connectionProtocol
-                if currentProtocol.requiresSystemExtension {
-                    // Forcefully revert default protocol to IKE - current protocol is unusable
-                    log.warning("\(currentProtocol) requires sysex (not installed), reverting to IKEv2", category: .sysex)
-                    self.propertiesManager.connectionProtocol = .vpnProtocol(.ike)
-                }
-            }
+    private func checkSysexApprovalAndAdjustProtocol(shouldDefaultToSmartIfPossible _: Bool, shouldStartTour _: Bool) {
+        if case .vpnProtocol(.wireGuard) = propertiesManager.connectionProtocol {
+            return
         }
+        propertiesManager.connectionProtocol = .vpnProtocol(.wireGuard(.udp))
     }
 
     private func handleLoginError(error: LoginError) {

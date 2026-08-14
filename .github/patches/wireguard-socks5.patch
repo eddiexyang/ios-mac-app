@@ -1,0 +1,1450 @@
+diff --git a/Package.swift b/Package.swift
+index 5e0f4e4499dc338a2001d28f14bad4ca6847df2e..44f66ee817c15288a4f4db41df48aa91bad01bb4 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -35,0 +36,3 @@ let package = Package(
++                "netstack_tun.go",
++                "socks_server.go",
++                "socks_server_test.go",
+diff --git a/Sources/WireGuardKitGo/api-apple.go b/Sources/WireGuardKitGo/api-apple.go
+index 64e5d255c557533c0eaefc77c4e64530ce8b8e68..c73c70fd21868c40665590044b657c87b17a93ab 100644
+--- a/Sources/WireGuardKitGo/api-apple.go
++++ b/Sources/WireGuardKitGo/api-apple.go
+@@ -18,0 +19 @@ import (
++	"net/netip"
+@@ -57,0 +59 @@ type tunnelHandle struct {
++	socks *socksServer
+@@ -129,2 +131,2 @@ func wgTurnOn(settings *C.char, tunFd int32, socketType *C.char) int32 {
+-					&connLogger,
+-					manager.SocketErrChan),
++			&connLogger,
++			manager.SocketErrChan),
+@@ -155 +157 @@ func wgTurnOn(settings *C.char, tunFd int32, socketType *C.char) int32 {
+-	tunnelHandles[i] = tunnelHandle{manager, dev, logger}
++	tunnelHandles[i] = tunnelHandle{WireGuardStateManager: manager, Device: dev, Logger: logger}
+@@ -158,0 +161,82 @@ func wgTurnOn(settings *C.char, tunFd int32, socketType *C.char) int32 {
++//export wgTurnOnSocks
++func wgTurnOnSocks(settings, listenAddress, tunnelAddresses, dnsAddress *C.char, mtu int32, socketType *C.char) int32 {
++	connLogger := conn.Logger{
++		Verbosef: CLogger(0).Printf,
++		Errorf:   CLogger(1).Printf,
++	}
++	logger := &device.Logger{connLogger}
++
++	var localAddresses []netip.Prefix
++	for _, value := range strings.Split(C.GoString(tunnelAddresses), ",") {
++		prefix, err := netip.ParsePrefix(strings.TrimSpace(value))
++		if err != nil {
++			logger.Errorf("Invalid userspace tunnel address %q: %v", value, err)
++			return -1
++		}
++		localAddresses = append(localAddresses, prefix)
++	}
++	dns, err := netip.ParseAddr(strings.TrimSpace(C.GoString(dnsAddress)))
++	if err != nil {
++		logger.Errorf("Invalid userspace DNS address: %v", err)
++		return -1
++	}
++	if mtu <= 0 {
++		mtu = 1280
++	}
++
++	tunDevice, err := createNetstackTUN(localAddresses, int(mtu))
++	if err != nil {
++		logger.Errorf("Unable to create userspace network stack: %v", err)
++		return -1
++	}
++
++	socketTypeGoString := C.GoString(socketType)
++	manager := device.NewWireGuardStateManager(logger, socketTypeGoString)
++	dev := device.NewDevice(tunDevice,
++		conn.CreateStdNetBind(socketTypeGoString,
++			&connLogger,
++			manager.SocketErrChan),
++		logger,
++		manager.HandshakeStateChan)
++
++	if err := dev.IpcSet(C.GoString(settings)); err != nil {
++		logger.Errorf("Unable to set IPC settings: %v", err)
++		dev.Close()
++		return -1
++	}
++	if err := dev.Up(); err != nil {
++		logger.Errorf("Unable to start userspace WireGuard device: %v", err)
++		dev.Close()
++		return -1
++	}
++
++	network := newNetstackNetwork(tunDevice, netip.AddrPortFrom(dns.Unmap(), 53))
++	socks, err := startSocksServer(C.GoString(listenAddress), network, logger)
++	if err != nil {
++		logger.Errorf("Unable to start SOCKS5 listener: %v", err)
++		dev.Close()
++		return -1
++	}
++	logger.Verbosef("SOCKS5 listener started on %s", socks.Addr())
++
++	var handleDescriptor int32
++	for handleDescriptor = 0; handleDescriptor < math.MaxInt32; handleDescriptor++ {
++		if _, exists := tunnelHandles[handleDescriptor]; !exists {
++			break
++		}
++	}
++	if handleDescriptor == math.MaxInt32 {
++		_ = socks.Close()
++		dev.Close()
++		return -1
++	}
++	manager.Start(dev)
++	tunnelHandles[handleDescriptor] = tunnelHandle{
++		WireGuardStateManager: manager,
++		Device:                dev,
++		Logger:                logger,
++		socks:                 socks,
++	}
++	return handleDescriptor
++}
++
+@@ -165,0 +250,3 @@ func wgTurnOff(handleDescriptor int32) {
++	if handle.socks != nil {
++		_ = handle.socks.Close()
++	}
+diff --git a/Sources/WireGuardKitGo/go.mod b/Sources/WireGuardKitGo/go.mod
+index 8e13ab30bbdf67cf2395c91afa39e6f39faa8d62..8f238d9bb214d620185e0b2c8e116ded75ef7cbb 100644
+--- a/Sources/WireGuardKitGo/go.mod
++++ b/Sources/WireGuardKitGo/go.mod
+@@ -8 +8,2 @@ require (
+-	golang.org/x/sys v0.18.0
++	github.com/metacubex/gvisor v0.0.0-20251227095601-261ec1326fe8
++	golang.org/x/sys v0.26.0
+@@ -14,0 +16 @@ require (
++	github.com/google/btree v1.1.2 // indirect
+@@ -18,0 +21 @@ require (
++	golang.org/x/time v0.7.0 // indirect
+diff --git a/Sources/WireGuardKitGo/go.sum b/Sources/WireGuardKitGo/go.sum
+index 47022c4c4f035c8d3b77fedb745edb8e5edbedd2..16920c807175a34733e558bc5c85b314d3de6d51 100644
+--- a/Sources/WireGuardKitGo/go.sum
++++ b/Sources/WireGuardKitGo/go.sum
+@@ -8,0 +9,2 @@ github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
++github.com/google/btree v1.1.2 h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=
++github.com/google/btree v1.1.2/go.mod h1:qOPhT0dTNdNzV6Z/lhRX0YXUafgPLFUh+gZMl761Gm4=
+@@ -10,0 +13,2 @@ github.com/klauspost/compress v1.17.4/go.mod h1:/dCuZOvVtNoHsyb+cuJD3itjs3NbnF6K
++github.com/metacubex/gvisor v0.0.0-20251227095601-261ec1326fe8 h1:hUL81H0Ic/XIDkvtn9M1pmfDdfid7JzYQToY4Ps1TvQ=
++github.com/metacubex/gvisor v0.0.0-20251227095601-261ec1326fe8/go.mod h1:8LpS0IJW1VmWzUm3ylb0e2SK5QDm5lO/2qwWLZgRpBU=
+@@ -21,2 +25,4 @@ golang.org/x/net v0.23.0/go.mod h1:JKghWKKOSdJwpW2GEx0Ja7fmaKnMsbu+MWVZTokSYmg=
+-golang.org/x/sys v0.18.0 h1:DBdB3niSjOA/O0blCZBqDefyWNYveAYMNF1Wum0DYQ4=
+-golang.org/x/sys v0.18.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
++golang.org/x/sys v0.26.0 h1:KHjCJyddX0LoSTb3J+vWpupP9p0oznkqVk/IfjymZbo=
++golang.org/x/sys v0.26.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
++golang.org/x/time v0.7.0 h1:ntUhktv3OPE6TgYxXWv9vKvUSJyIFJlyohwbkEwPrKQ=
++golang.org/x/time v0.7.0/go.mod h1:3BpzKBy/shNhVucY/MWOyx10tF3SFh9QdLuxbVysPQM=
+diff --git a/Sources/WireGuardKitGo/wireguard.h b/Sources/WireGuardKitGo/wireguard.h
+index c28d5072d457d76119d9287ebb5f0250f624dcfb..78f6f81f6ce78f883557ccf0552eed8ba01fb84b 100644
+--- a/Sources/WireGuardKitGo/wireguard.h
++++ b/Sources/WireGuardKitGo/wireguard.h
+@@ -17,0 +18 @@ extern int wgTurnOn(const char *settings, int32_t tun_fd, const char *socketType
++extern int wgTurnOnSocks(const char *settings, const char *listenAddress, const char *tunnelAddresses, const char *dnsAddress, int32_t mtu, const char *socketType);
+diff --git a/Sources/WireGuardKit/WireGuardSocksAdapter.swift b/Sources/WireGuardKit/WireGuardSocksAdapter.swift
+new file mode 100644
+index 0000000000000000000000000000000000000000..547bb4483651f3f68b0581c389f52e376c6fafc0
+--- /dev/null
++++ b/Sources/WireGuardKit/WireGuardSocksAdapter.swift
+@@ -0,0 +1,187 @@
++// SPDX-License-Identifier: MIT
++// Copyright © 2026 Proton AG. All Rights Reserved.
++
++#if os(macOS)
++import Foundation
++import Network
++
++#if SWIFT_PACKAGE
++import WireGuardKitGo
++import WireGuardKitSupport
++#endif
++
++public enum WireGuardSocksAdapterError: Error {
++    case invalidState
++    case invalidConfiguration(String)
++    case dnsResolution([DNSResolutionError])
++    case startWireGuardBackend(Int32)
++    case setWireGuardConfig(Int64)
++}
++
++public final class WireGuardSocksAdapter {
++    public typealias LogHandler = (WireGuardLogLevel, String) -> Void
++
++    private let logHandler: LogHandler
++    private let workQueue = DispatchQueue(label: "WireGuardSocksAdapterWorkQueue")
++    private let pathQueue = DispatchQueue(label: "WireGuardSocksAdapterPathQueue")
++    private var pathMonitor: NWPathMonitor?
++    private var handle: Int32?
++
++    public init(logHandler: @escaping LogHandler) {
++        self.logHandler = logHandler
++        setupLogHandler()
++    }
++
++    deinit {
++        pathMonitor?.cancel()
++        if let handle {
++            wgTurnOff(handle)
++        }
++        wgSetLogger(nil, nil)
++    }
++
++    public func start(
++        tunnelConfiguration: TunnelConfiguration,
++        listenAddress: String,
++        socketType: String,
++        completionHandler: @escaping (WireGuardSocksAdapterError?) -> Void
++    ) {
++        workQueue.async {
++            guard self.handle == nil else {
++                completionHandler(.invalidState)
++                return
++            }
++
++            do {
++                let settingsGenerator = try self.makeSettingsGenerator(tunnelConfiguration)
++                let (wgConfig, _) = settingsGenerator.uapiConfiguration()
++                let tunnelAddresses = tunnelConfiguration.interface.addresses
++                    .map(\.stringRepresentation)
++                    .joined(separator: ",")
++                guard !tunnelAddresses.isEmpty else {
++                    throw WireGuardSocksAdapterError.invalidConfiguration("missing tunnel address")
++                }
++                guard let dnsAddress = tunnelConfiguration.interface.dns.first(where: { server in
++                    guard case .classic = server.transport else { return false }
++                    return server.address is IPv4Address
++                })?.stringRepresentation else {
++                    throw WireGuardSocksAdapterError.invalidConfiguration("missing classic IPv4 DNS server")
++                }
++
++                let mtu = Int32(tunnelConfiguration.interface.mtu ?? 1280)
++                let handle = wgTurnOnSocks(
++                    wgConfig,
++                    listenAddress,
++                    tunnelAddresses,
++                    dnsAddress,
++                    mtu,
++                    socketType
++                )
++                guard handle >= 0 else {
++                    throw WireGuardSocksAdapterError.startWireGuardBackend(handle)
++                }
++
++                self.handle = handle
++                wgSetNetworkAvailable(handle, 1)
++                self.startPathMonitor()
++                completionHandler(nil)
++            } catch let error as WireGuardSocksAdapterError {
++                completionHandler(error)
++            } catch {
++                completionHandler(.invalidConfiguration(error.localizedDescription))
++            }
++        }
++    }
++
++    public func update(
++        tunnelConfiguration: TunnelConfiguration,
++        completionHandler: @escaping (WireGuardSocksAdapterError?) -> Void
++    ) {
++        workQueue.async {
++            guard let handle = self.handle else {
++                completionHandler(.invalidState)
++                return
++            }
++
++            do {
++                let settingsGenerator = try self.makeSettingsGenerator(tunnelConfiguration)
++                let (wgConfig, _) = settingsGenerator.uapiConfiguration()
++                let result = wgSetConfig(handle, wgConfig)
++                guard result == 0 else {
++                    completionHandler(.setWireGuardConfig(result))
++                    return
++                }
++                wgBumpSockets(handle)
++                completionHandler(nil)
++            } catch let error as WireGuardSocksAdapterError {
++                completionHandler(error)
++            } catch {
++                completionHandler(.invalidConfiguration(error.localizedDescription))
++            }
++        }
++    }
++
++    public func stop(completionHandler: @escaping (WireGuardSocksAdapterError?) -> Void) {
++        workQueue.async {
++            guard let handle = self.handle else {
++                completionHandler(.invalidState)
++                return
++            }
++
++            self.pathMonitor?.cancel()
++            self.pathMonitor = nil
++            self.handle = nil
++            wgTurnOff(handle)
++            completionHandler(nil)
++        }
++    }
++
++    private func makeSettingsGenerator(_ tunnelConfiguration: TunnelConfiguration) throws -> PacketTunnelSettingsGenerator {
++        let endpoints = tunnelConfiguration.peers.map(\.endpoint)
++        let results = DNSResolver.resolveSync(endpoints: endpoints)
++        let errors = results.compactMap { result -> DNSResolutionError? in
++            guard case let .failure(error)? = result else { return nil }
++            return error
++        }
++        guard errors.isEmpty else {
++            throw WireGuardSocksAdapterError.dnsResolution(errors)
++        }
++
++        let resolvedEndpoints = results.map { result -> Endpoint? in
++            guard case let .success(endpoint)? = result else { return nil }
++            return endpoint
++        }
++        return PacketTunnelSettingsGenerator(
++            tunnelConfiguration: tunnelConfiguration,
++            resolvedEndpoints: resolvedEndpoints
++        )
++    }
++
++    private func startPathMonitor() {
++        let monitor = NWPathMonitor()
++        monitor.pathUpdateHandler = { [weak self] path in
++            self?.workQueue.async {
++                guard let self, let handle = self.handle else { return }
++                if path.status == .satisfied {
++                    wgSetNetworkAvailable(handle, 1)
++                    wgBumpSockets(handle)
++                } else {
++                    wgSetNetworkAvailable(handle, 0)
++                }
++            }
++        }
++        pathMonitor = monitor
++        monitor.start(queue: pathQueue)
++    }
++
++    private func setupLogHandler() {
++        let context = Unmanaged.passUnretained(self).toOpaque()
++        wgSetLogger(context) { context, logLevel, message in
++            guard let context, let message else { return }
++            let adapter = Unmanaged<WireGuardSocksAdapter>.fromOpaque(context).takeUnretainedValue()
++            let level = WireGuardLogLevel(rawValue: logLevel) ?? .verbose
++            adapter.logHandler(level, String(cString: message).trimmingCharacters(in: .newlines))
++        }
++    }
++}
++#endif
+diff --git a/Sources/WireGuardKitGo/netstack_tun.go b/Sources/WireGuardKitGo/netstack_tun.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..0531492b7c48db9a3d02a3d37b52b3f41a93c224
+--- /dev/null
++++ b/Sources/WireGuardKitGo/netstack_tun.go
+@@ -0,0 +1,308 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * Copyright (C) 2019-2023 WireGuard LLC. All Rights Reserved.
++ */
++
++package main
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"net"
++	"net/netip"
++	"os"
++	"strings"
++	"sync"
++	"syscall"
++
++	"github.com/metacubex/gvisor/pkg/buffer"
++	"github.com/metacubex/gvisor/pkg/tcpip"
++	"github.com/metacubex/gvisor/pkg/tcpip/adapters/gonet"
++	"github.com/metacubex/gvisor/pkg/tcpip/header"
++	"github.com/metacubex/gvisor/pkg/tcpip/link/channel"
++	"github.com/metacubex/gvisor/pkg/tcpip/network/ipv4"
++	"github.com/metacubex/gvisor/pkg/tcpip/network/ipv6"
++	"github.com/metacubex/gvisor/pkg/tcpip/stack"
++	"github.com/metacubex/gvisor/pkg/tcpip/transport/icmp"
++	"github.com/metacubex/gvisor/pkg/tcpip/transport/tcp"
++	"github.com/metacubex/gvisor/pkg/tcpip/transport/udp"
++	"golang.zx2c4.com/wireguard/tun"
++)
++
++const netstackNIC tcpip.NICID = 1
++
++// netstackTUN implements the legacy tun.Device interface used by Proton's
++// WireGuard fork. Packets never reach a Darwin utun: gVisor terminates TCP and
++// UDP inside this process and WireGuard only sees IP packets on this channel.
++type netstackTUN struct {
++	ep       *channel.Endpoint
++	stack    *stack.Stack
++	events   chan tun.Event
++	outbound chan *buffer.View
++	mtu      int
++	local4   netip.Addr
++
++	ctx       context.Context
++	cancel    context.CancelFunc
++	closeOnce sync.Once
++}
++
++func createNetstackTUN(localAddresses []netip.Prefix, mtu int) (*netstackTUN, error) {
++	ctx, cancel := context.WithCancel(context.Background())
++	device := &netstackTUN{
++		ep: channel.New(1024, uint32(mtu), ""),
++		stack: stack.New(stack.Options{
++			NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
++			TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6},
++			HandleLocal:        true,
++		}),
++		events:   make(chan tun.Event, 1),
++		outbound: make(chan *buffer.View, 256),
++		mtu:      mtu,
++		ctx:      ctx,
++		cancel:   cancel,
++	}
++
++	device.ep.AddNotify(device)
++	if err := device.stack.CreateNIC(netstackNIC, device.ep); err != nil {
++		cancel()
++		return nil, fmt.Errorf("create netstack NIC: %s", err)
++	}
++
++	for _, prefix := range localAddresses {
++		address := prefix.Addr().Unmap()
++		var protocol tcpip.NetworkProtocolNumber
++		if address.Is4() {
++			protocol = ipv4.ProtocolNumber
++			device.local4 = address
++		} else if address.Is6() {
++			protocol = ipv6.ProtocolNumber
++		} else {
++			device.Close()
++			return nil, fmt.Errorf("invalid netstack address %q", prefix)
++		}
++
++		protocolAddress := tcpip.ProtocolAddress{
++			Protocol: protocol,
++			AddressWithPrefix: tcpip.AddressWithPrefix{
++				Address:   tcpip.AddrFromSlice(address.AsSlice()),
++				PrefixLen: prefix.Bits(),
++			},
++		}
++		if err := device.stack.AddProtocolAddress(netstackNIC, protocolAddress, stack.AddressProperties{}); err != nil {
++			device.Close()
++			return nil, fmt.Errorf("add netstack address %q: %s", prefix, err)
++		}
++	}
++
++	if !device.local4.IsValid() {
++		device.Close()
++		return nil, errors.New("an IPv4 tunnel address is required")
++	}
++
++	sack := tcpip.TCPSACKEnabled(true)
++	if err := device.stack.SetTransportProtocolOption(tcp.ProtocolNumber, &sack); err != nil {
++		device.Close()
++		return nil, fmt.Errorf("enable TCP SACK: %s", err)
++	}
++	device.stack.AddRoute(tcpip.Route{Destination: header.IPv4EmptySubnet, NIC: netstackNIC})
++	device.stack.AddRoute(tcpip.Route{Destination: header.IPv6EmptySubnet, NIC: netstackNIC})
++	device.events <- tun.EventUp
++	return device, nil
++}
++
++func (device *netstackTUN) File() *os.File { return nil }
++
++func (device *netstackTUN) Name() (string, error) { return "proton-socks-netstack", nil }
++
++func (device *netstackTUN) Events() chan tun.Event { return device.events }
++
++func (device *netstackTUN) MTU() (int, error) { return device.mtu, nil }
++
++func (device *netstackTUN) Flush() error { return nil }
++
++func (device *netstackTUN) Read(packet []byte, offset int) (int, error) {
++	select {
++	case view := <-device.outbound:
++		if view == nil {
++			return 0, os.ErrClosed
++		}
++		defer view.Release()
++		return view.Read(packet[offset:])
++	case <-device.ctx.Done():
++		return 0, os.ErrClosed
++	}
++}
++
++func (device *netstackTUN) Write(packet []byte, offset int) (int, error) {
++	packet = packet[offset:]
++	if len(packet) == 0 {
++		return 0, nil
++	}
++
++	packetBuffer := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(packet)})
++	defer packetBuffer.DecRef()
++
++	switch packet[0] >> 4 {
++	case 4:
++		device.ep.InjectInbound(header.IPv4ProtocolNumber, packetBuffer)
++	case 6:
++		device.ep.InjectInbound(header.IPv6ProtocolNumber, packetBuffer)
++	default:
++		return 0, syscall.EAFNOSUPPORT
++	}
++	return len(packet), nil
++}
++
++func (device *netstackTUN) WriteNotify() {
++	packet := device.ep.Read()
++	if packet == nil {
++		return
++	}
++	view := packet.ToView()
++	packet.DecRef()
++
++	select {
++	case device.outbound <- view:
++	case <-device.ctx.Done():
++		view.Release()
++	}
++}
++
++func (device *netstackTUN) Close() error {
++	device.closeOnce.Do(func() {
++		device.cancel()
++		device.stack.RemoveNIC(netstackNIC)
++		device.ep.Close()
++		close(device.events)
++	})
++	return nil
++}
++
++func netstackFullAddress(address netip.AddrPort) (tcpip.FullAddress, tcpip.NetworkProtocolNumber) {
++	protocol := ipv6.ProtocolNumber
++	if address.Addr().Is4() {
++		protocol = ipv4.ProtocolNumber
++	}
++	return tcpip.FullAddress{
++		NIC:  netstackNIC,
++		Addr: tcpip.AddrFromSlice(address.Addr().AsSlice()),
++		Port: address.Port(),
++	}, protocol
++}
++
++func (device *netstackTUN) dialTCP(ctx context.Context, address netip.AddrPort) (net.Conn, error) {
++	fullAddress, protocol := netstackFullAddress(address)
++	return gonet.DialContextTCP(ctx, device.stack, fullAddress, protocol)
++}
++
++func (device *netstackTUN) dialUDP(local, remote netip.AddrPort) (net.PacketConn, error) {
++	var localAddress, remoteAddress *tcpip.FullAddress
++	protocol := ipv4.ProtocolNumber
++	if local.IsValid() {
++		value, valueProtocol := netstackFullAddress(local)
++		localAddress = &value
++		protocol = valueProtocol
++	}
++	if remote.IsValid() {
++		value, valueProtocol := netstackFullAddress(remote)
++		remoteAddress = &value
++		protocol = valueProtocol
++	}
++	return gonet.DialUDP(device.stack, localAddress, remoteAddress, protocol)
++}
++
++type netstackNetwork struct {
++	device   *netstackTUN
++	resolver *net.Resolver
++	dns      netip.AddrPort
++}
++
++func newNetstackNetwork(device *netstackTUN, dns netip.AddrPort) *netstackNetwork {
++	network := &netstackNetwork{device: device, dns: dns}
++	network.resolver = &net.Resolver{
++		PreferGo: true,
++		Dial: func(ctx context.Context, protocol, _ string) (net.Conn, error) {
++			switch {
++			case strings.HasPrefix(protocol, "tcp"):
++				return device.dialTCP(ctx, dns)
++			case strings.HasPrefix(protocol, "udp"):
++				packetConn, err := device.dialUDP(netip.AddrPortFrom(device.local4, 0), dns)
++				if err != nil {
++					return nil, err
++				}
++				connection, ok := packetConn.(net.Conn)
++				if !ok {
++					packetConn.Close()
++					return nil, errors.New("netstack DNS packet connection is not a net.Conn")
++				}
++				return connection, nil
++			default:
++				return nil, fmt.Errorf("unsupported DNS network %q", protocol)
++			}
++		},
++	}
++	return network
++}
++
++func (network *netstackNetwork) resolveIPv4(ctx context.Context, host string) (netip.Addr, error) {
++	if address, err := netip.ParseAddr(host); err == nil {
++		address = address.Unmap()
++		if address.Is4() {
++			return address, nil
++		}
++		return netip.Addr{}, fmt.Errorf("IPv6 destination %q is unavailable on this Proton tunnel", host)
++	}
++
++	addresses, err := network.resolver.LookupNetIP(ctx, "ip4", host)
++	if err != nil {
++		return netip.Addr{}, err
++	}
++	for _, address := range addresses {
++		address = address.Unmap()
++		if address.Is4() {
++			return address, nil
++		}
++	}
++	return netip.Addr{}, fmt.Errorf("no IPv4 address returned for %q", host)
++}
++
++func (network *netstackNetwork) resolveAddress(ctx context.Context, address string) (netip.AddrPort, error) {
++	host, portString, err := net.SplitHostPort(address)
++	if err != nil {
++		return netip.AddrPort{}, err
++	}
++	port, err := net.LookupPort("tcp", portString)
++	if err != nil {
++		return netip.AddrPort{}, err
++	}
++	ip, err := network.resolveIPv4(ctx, host)
++	if err != nil {
++		return netip.AddrPort{}, err
++	}
++	return netip.AddrPortFrom(ip, uint16(port)), nil
++}
++
++func (network *netstackNetwork) DialContext(ctx context.Context, networkName, address string) (net.Conn, error) {
++	if !strings.HasPrefix(networkName, "tcp") {
++		return nil, fmt.Errorf("unsupported stream network %q", networkName)
++	}
++	resolved, err := network.resolveAddress(ctx, address)
++	if err != nil {
++		return nil, err
++	}
++	return network.device.dialTCP(ctx, resolved)
++}
++
++func (network *netstackNetwork) ListenPacket(_ context.Context) (net.PacketConn, error) {
++	return network.device.dialUDP(netip.AddrPortFrom(network.device.local4, 0), netip.AddrPort{})
++}
++
++func (network *netstackNetwork) ResolveUDPAddress(ctx context.Context, address string) (*net.UDPAddr, error) {
++	resolved, err := network.resolveAddress(ctx, address)
++	if err != nil {
++		return nil, err
++	}
++	return net.UDPAddrFromAddrPort(resolved), nil
++}
+diff --git a/Sources/WireGuardKitGo/socks_server.go b/Sources/WireGuardKitGo/socks_server.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..fa5b2fee0d4242b4d413bbaa31f81b9d1a2c4c3a
+--- /dev/null
++++ b/Sources/WireGuardKitGo/socks_server.go
+@@ -0,0 +1,577 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * Copyright (C) 2026 Proton AG
++ */
++
++package main
++
++import (
++	"bytes"
++	"context"
++	"encoding/binary"
++	"errors"
++	"fmt"
++	"io"
++	"net"
++	"strconv"
++	"sync"
++	"syscall"
++	"time"
++
++	"golang.zx2c4.com/wireguard/device"
++)
++
++const (
++	socksVersion5 = 5
++
++	socksMethodNoAuthentication = 0
++	socksMethodNotAcceptable    = 0xff
++
++	socksCommandConnect      = 1
++	socksCommandUDPAssociate = 3
++
++	socksAddressIPv4   = 1
++	socksAddressDomain = 3
++	socksAddressIPv6   = 4
++
++	socksReplySucceeded               = 0
++	socksReplyGeneralFailure          = 1
++	socksReplyNetworkUnreachable      = 3
++	socksReplyHostUnreachable         = 4
++	socksReplyConnectionRefused       = 5
++	socksReplyCommandNotSupported     = 7
++	socksReplyAddressTypeNotSupported = 8
++)
++
++type socksNetwork interface {
++	DialContext(context.Context, string, string) (net.Conn, error)
++	ListenPacket(context.Context) (net.PacketConn, error)
++	ResolveUDPAddress(context.Context, string) (*net.UDPAddr, error)
++}
++
++type socksAddress struct {
++	host string
++	port uint16
++}
++
++func (address socksAddress) String() string {
++	return net.JoinHostPort(address.host, strconv.Itoa(int(address.port)))
++}
++
++type socksServer struct {
++	listener net.Listener
++	network  socksNetwork
++	logger   *device.Logger
++	ctx      context.Context
++	cancel   context.CancelFunc
++
++	mu        sync.Mutex
++	closed    bool
++	clients   map[net.Conn]struct{}
++	waitGroup sync.WaitGroup
++	closeOnce sync.Once
++}
++
++func startSocksServer(listenAddress string, network socksNetwork, logger *device.Logger) (*socksServer, error) {
++	if network == nil {
++		return nil, errors.New("SOCKS network is required")
++	}
++	if err := validateLoopbackAddress(listenAddress); err != nil {
++		return nil, err
++	}
++
++	listener, err := net.Listen("tcp", listenAddress)
++	if err != nil {
++		return nil, fmt.Errorf("listen for SOCKS5: %w", err)
++	}
++	ctx, cancel := context.WithCancel(context.Background())
++	server := &socksServer{
++		listener: listener,
++		network:  network,
++		logger:   logger,
++		ctx:      ctx,
++		cancel:   cancel,
++		clients:  make(map[net.Conn]struct{}),
++	}
++	server.waitGroup.Add(1)
++	go server.serve()
++	return server, nil
++}
++
++func validateLoopbackAddress(address string) error {
++	host, port, err := net.SplitHostPort(address)
++	if err != nil {
++		return fmt.Errorf("invalid SOCKS5 listen address: %w", err)
++	}
++	ip := net.ParseIP(host)
++	if ip == nil || !ip.IsLoopback() {
++		return fmt.Errorf("SOCKS5 listener must use a numeric loopback address, got %q", host)
++	}
++	portNumber, err := strconv.ParseUint(port, 10, 16)
++	if err != nil {
++		return fmt.Errorf("invalid SOCKS5 listen port %q", port)
++	}
++	if portNumber == 0 && port != "0" {
++		return fmt.Errorf("invalid SOCKS5 listen port %q", port)
++	}
++	return nil
++}
++
++func (server *socksServer) Addr() net.Addr {
++	return server.listener.Addr()
++}
++
++func (server *socksServer) logError(format string, values ...interface{}) {
++	if server.logger != nil {
++		server.logger.Errorf(format, values...)
++	}
++}
++
++func (server *socksServer) serve() {
++	defer server.waitGroup.Done()
++	for {
++		connection, err := server.listener.Accept()
++		if err != nil {
++			if !errors.Is(err, net.ErrClosed) && server.ctx.Err() == nil {
++				server.logError("SOCKS5 accept failed: %v", err)
++			}
++			return
++		}
++		if !server.registerClient(connection) {
++			_ = connection.Close()
++			return
++		}
++		server.waitGroup.Add(1)
++		go server.handleClient(connection)
++	}
++}
++
++func (server *socksServer) registerClient(connection net.Conn) bool {
++	server.mu.Lock()
++	defer server.mu.Unlock()
++	if server.closed {
++		return false
++	}
++	server.clients[connection] = struct{}{}
++	return true
++}
++
++func (server *socksServer) unregisterClient(connection net.Conn) {
++	server.mu.Lock()
++	delete(server.clients, connection)
++	server.mu.Unlock()
++}
++
++func (server *socksServer) handleClient(connection net.Conn) {
++	defer server.waitGroup.Done()
++	defer server.unregisterClient(connection)
++	defer connection.Close()
++
++	if err := negotiateSocksAuthentication(connection); err != nil {
++		server.logError("SOCKS5 authentication negotiation failed: %v", err)
++		return
++	}
++	command, destination, err := readSocksRequest(connection)
++	if err != nil {
++		server.logError("SOCKS5 request failed: %v", err)
++		return
++	}
++
++	switch command {
++	case socksCommandConnect:
++		server.handleConnect(connection, destination)
++	case socksCommandUDPAssociate:
++		server.handleUDPAssociate(connection)
++	default:
++		_ = writeSocksReply(connection, socksReplyCommandNotSupported, socksAddress{})
++	}
++}
++
++func negotiateSocksAuthentication(connection net.Conn) error {
++	header := make([]byte, 2)
++	if _, err := io.ReadFull(connection, header); err != nil {
++		return err
++	}
++	if header[0] != socksVersion5 {
++		return fmt.Errorf("unsupported SOCKS version %d", header[0])
++	}
++	if header[1] == 0 {
++		return errors.New("SOCKS5 client supplied no authentication methods")
++	}
++	methods := make([]byte, int(header[1]))
++	if _, err := io.ReadFull(connection, methods); err != nil {
++		return err
++	}
++	selected := byte(socksMethodNotAcceptable)
++	for _, method := range methods {
++		if method == socksMethodNoAuthentication {
++			selected = socksMethodNoAuthentication
++			break
++		}
++	}
++	if _, err := connection.Write([]byte{socksVersion5, selected}); err != nil {
++		return err
++	}
++	if selected == socksMethodNotAcceptable {
++		return errors.New("SOCKS5 client did not offer no-authentication mode")
++	}
++	return nil
++}
++
++func readSocksRequest(reader io.Reader) (byte, socksAddress, error) {
++	header := make([]byte, 3)
++	if _, err := io.ReadFull(reader, header); err != nil {
++		return 0, socksAddress{}, err
++	}
++	if header[0] != socksVersion5 {
++		return 0, socksAddress{}, fmt.Errorf("unsupported SOCKS version %d", header[0])
++	}
++	if header[2] != 0 {
++		return 0, socksAddress{}, errors.New("invalid SOCKS5 reserved field")
++	}
++	address, err := readSocksAddress(reader)
++	return header[1], address, err
++}
++
++func readSocksAddress(reader io.Reader) (socksAddress, error) {
++	addressType := []byte{0}
++	if _, err := io.ReadFull(reader, addressType); err != nil {
++		return socksAddress{}, err
++	}
++
++	var host string
++	switch addressType[0] {
++	case socksAddressIPv4:
++		value := make([]byte, net.IPv4len)
++		if _, err := io.ReadFull(reader, value); err != nil {
++			return socksAddress{}, err
++		}
++		host = net.IP(value).String()
++	case socksAddressIPv6:
++		value := make([]byte, net.IPv6len)
++		if _, err := io.ReadFull(reader, value); err != nil {
++			return socksAddress{}, err
++		}
++		host = net.IP(value).String()
++	case socksAddressDomain:
++		length := []byte{0}
++		if _, err := io.ReadFull(reader, length); err != nil {
++			return socksAddress{}, err
++		}
++		if length[0] == 0 {
++			return socksAddress{}, errors.New("empty SOCKS5 domain")
++		}
++		value := make([]byte, int(length[0]))
++		if _, err := io.ReadFull(reader, value); err != nil {
++			return socksAddress{}, err
++		}
++		host = string(value)
++	default:
++		return socksAddress{}, fmt.Errorf("unsupported SOCKS5 address type %d", addressType[0])
++	}
++
++	portBytes := make([]byte, 2)
++	if _, err := io.ReadFull(reader, portBytes); err != nil {
++		return socksAddress{}, err
++	}
++	return socksAddress{host: host, port: binary.BigEndian.Uint16(portBytes)}, nil
++}
++
++func marshalSocksAddress(address socksAddress) ([]byte, error) {
++	port := make([]byte, 2)
++	binary.BigEndian.PutUint16(port, address.port)
++
++	ip := net.ParseIP(address.host)
++	if ipv4 := ip.To4(); ipv4 != nil {
++		result := []byte{socksAddressIPv4}
++		result = append(result, ipv4...)
++		return append(result, port...), nil
++	}
++	if ipv6 := ip.To16(); ipv6 != nil {
++		result := []byte{socksAddressIPv6}
++		result = append(result, ipv6...)
++		return append(result, port...), nil
++	}
++	if len(address.host) == 0 {
++		return []byte{socksAddressIPv4, 0, 0, 0, 0, 0, 0}, nil
++	}
++	if len(address.host) > 255 {
++		return nil, errors.New("SOCKS5 domain is too long")
++	}
++	result := []byte{socksAddressDomain, byte(len(address.host))}
++	result = append(result, []byte(address.host)...)
++	return append(result, port...), nil
++}
++
++func writeSocksReply(writer io.Writer, reply byte, address socksAddress) error {
++	encodedAddress, err := marshalSocksAddress(address)
++	if err != nil {
++		return err
++	}
++	response := []byte{socksVersion5, reply, 0}
++	response = append(response, encodedAddress...)
++	_, err = writer.Write(response)
++	return err
++}
++
++func socksAddressFromNetAddress(address net.Addr) socksAddress {
++	if address == nil {
++		return socksAddress{}
++	}
++	host, portString, err := net.SplitHostPort(address.String())
++	if err != nil {
++		return socksAddress{}
++	}
++	port, err := strconv.ParseUint(portString, 10, 16)
++	if err != nil {
++		return socksAddress{}
++	}
++	return socksAddress{host: host, port: uint16(port)}
++}
++
++func (server *socksServer) handleConnect(client net.Conn, destination socksAddress) {
++	dialContext, cancel := context.WithTimeout(server.ctx, 30*time.Second)
++	defer cancel()
++	upstream, err := server.network.DialContext(dialContext, "tcp", destination.String())
++	if err != nil {
++		_ = writeSocksReply(client, socksReplyForError(err), socksAddress{})
++		return
++	}
++	defer upstream.Close()
++	if err := writeSocksReply(client, socksReplySucceeded, socksAddressFromNetAddress(upstream.LocalAddr())); err != nil {
++		return
++	}
++
++	done := make(chan struct{}, 2)
++	go func() {
++		_, _ = io.Copy(upstream, client)
++		done <- struct{}{}
++	}()
++	go func() {
++		_, _ = io.Copy(client, upstream)
++		done <- struct{}{}
++	}()
++
++	completed := 0
++	select {
++	case <-done:
++		completed = 1
++	case <-server.ctx.Done():
++	}
++	_ = client.Close()
++	_ = upstream.Close()
++	for completed < 2 {
++		<-done
++		completed++
++	}
++}
++
++func socksReplyForError(err error) byte {
++	switch {
++	case errors.Is(err, syscall.ENETUNREACH):
++		return socksReplyNetworkUnreachable
++	case errors.Is(err, syscall.EHOSTUNREACH):
++		return socksReplyHostUnreachable
++	case errors.Is(err, syscall.ECONNREFUSED):
++		return socksReplyConnectionRefused
++	default:
++		return socksReplyGeneralFailure
++	}
++}
++
++func (server *socksServer) handleUDPAssociate(control net.Conn) {
++	localAddress, ok := server.listener.Addr().(*net.TCPAddr)
++	if !ok {
++		_ = writeSocksReply(control, socksReplyGeneralFailure, socksAddress{})
++		return
++	}
++	relay, err := net.ListenUDP("udp", &net.UDPAddr{IP: localAddress.IP, Port: 0})
++	if err != nil {
++		_ = writeSocksReply(control, socksReplyGeneralFailure, socksAddress{})
++		return
++	}
++	defer relay.Close()
++
++	upstream, err := server.network.ListenPacket(server.ctx)
++	if err != nil {
++		_ = writeSocksReply(control, socksReplyGeneralFailure, socksAddress{})
++		return
++	}
++	defer upstream.Close()
++
++	if err := writeSocksReply(control, socksReplySucceeded, socksAddressFromNetAddress(relay.LocalAddr())); err != nil {
++		return
++	}
++
++	association := &udpAssociation{
++		relay:         relay,
++		upstream:      upstream,
++		network:       server.network,
++		controlPeerIP: peerIP(control.RemoteAddr()),
++	}
++	done := make(chan struct{}, 3)
++	go func() {
++		association.clientToUpstream(server.ctx)
++		done <- struct{}{}
++	}()
++	go func() {
++		association.upstreamToClient()
++		done <- struct{}{}
++	}()
++	go func() {
++		buffer := make([]byte, 1)
++		_, _ = control.Read(buffer)
++		done <- struct{}{}
++	}()
++
++	completed := 0
++	select {
++	case <-done:
++		completed = 1
++	case <-server.ctx.Done():
++	}
++	_ = control.Close()
++	_ = relay.Close()
++	_ = upstream.Close()
++	for completed < 3 {
++		<-done
++		completed++
++	}
++}
++
++type udpAssociation struct {
++	relay    *net.UDPConn
++	upstream net.PacketConn
++	network  socksNetwork
++
++	clientMu      sync.RWMutex
++	clientAddress *net.UDPAddr
++	controlPeerIP net.IP
++}
++
++func peerIP(address net.Addr) net.IP {
++	host, _, err := net.SplitHostPort(address.String())
++	if err != nil {
++		return nil
++	}
++	return net.ParseIP(host)
++}
++
++func (association *udpAssociation) acceptClient(address *net.UDPAddr) bool {
++	if association.controlPeerIP != nil && !association.controlPeerIP.Equal(address.IP) {
++		return false
++	}
++	association.clientMu.Lock()
++	defer association.clientMu.Unlock()
++	if association.clientAddress == nil {
++		association.clientAddress = address
++		return true
++	}
++	return association.clientAddress.IP.Equal(address.IP) && association.clientAddress.Port == address.Port
++}
++
++func (association *udpAssociation) client() *net.UDPAddr {
++	association.clientMu.RLock()
++	defer association.clientMu.RUnlock()
++	if association.clientAddress == nil {
++		return nil
++	}
++	copy := *association.clientAddress
++	return &copy
++}
++
++func (association *udpAssociation) clientToUpstream(ctx context.Context) {
++	buffer := make([]byte, 64*1024)
++	for {
++		length, clientAddress, err := association.relay.ReadFromUDP(buffer)
++		if err != nil {
++			return
++		}
++		if !association.acceptClient(clientAddress) {
++			continue
++		}
++		destination, payload, err := parseSocksUDPDatagram(buffer[:length])
++		if err != nil {
++			continue
++		}
++		resolved, err := association.network.ResolveUDPAddress(ctx, destination.String())
++		if err != nil {
++			continue
++		}
++		if _, err := association.upstream.WriteTo(payload, resolved); err != nil {
++			return
++		}
++	}
++}
++
++func (association *udpAssociation) upstreamToClient() {
++	buffer := make([]byte, 64*1024)
++	for {
++		length, source, err := association.upstream.ReadFrom(buffer)
++		if err != nil {
++			return
++		}
++		clientAddress := association.client()
++		if clientAddress == nil {
++			continue
++		}
++		datagram, err := marshalSocksUDPDatagram(socksAddressFromNetAddress(source), buffer[:length])
++		if err != nil {
++			continue
++		}
++		if _, err := association.relay.WriteToUDP(datagram, clientAddress); err != nil {
++			return
++		}
++	}
++}
++
++func parseSocksUDPDatagram(datagram []byte) (socksAddress, []byte, error) {
++	if len(datagram) < 4 || datagram[0] != 0 || datagram[1] != 0 {
++		return socksAddress{}, nil, errors.New("invalid SOCKS5 UDP header")
++	}
++	if datagram[2] != 0 {
++		return socksAddress{}, nil, errors.New("fragmented SOCKS5 UDP datagrams are unsupported")
++	}
++	reader := bytes.NewReader(datagram[3:])
++	address, err := readSocksAddress(reader)
++	if err != nil {
++		return socksAddress{}, nil, err
++	}
++	payload := make([]byte, reader.Len())
++	_, _ = io.ReadFull(reader, payload)
++	return address, payload, nil
++}
++
++func marshalSocksUDPDatagram(source socksAddress, payload []byte) ([]byte, error) {
++	address, err := marshalSocksAddress(source)
++	if err != nil {
++		return nil, err
++	}
++	datagram := []byte{0, 0, 0}
++	datagram = append(datagram, address...)
++	return append(datagram, payload...), nil
++}
++
++func (server *socksServer) Close() error {
++	var closeError error
++	server.closeOnce.Do(func() {
++		server.cancel()
++		closeError = server.listener.Close()
++
++		server.mu.Lock()
++		server.closed = true
++		clients := make([]net.Conn, 0, len(server.clients))
++		for client := range server.clients {
++			clients = append(clients, client)
++		}
++		server.mu.Unlock()
++		for _, client := range clients {
++			_ = client.Close()
++		}
++		server.waitGroup.Wait()
++	})
++	if errors.Is(closeError, net.ErrClosed) {
++		return nil
++	}
++	return closeError
++}
+diff --git a/Sources/WireGuardKitGo/socks_server_test.go b/Sources/WireGuardKitGo/socks_server_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..576f192777e66a3a2ed8d7ec2b6ae727c6b3e429
+--- /dev/null
++++ b/Sources/WireGuardKitGo/socks_server_test.go
+@@ -0,0 +1,208 @@
++package main
++
++import (
++	"bytes"
++	"context"
++	"io"
++	"net"
++	"reflect"
++	"testing"
++	"time"
++)
++
++type directSocksNetwork struct{}
++
++func (directSocksNetwork) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
++	return (&net.Dialer{}).DialContext(ctx, network, address)
++}
++
++func (directSocksNetwork) ListenPacket(context.Context) (net.PacketConn, error) {
++	return net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
++}
++
++func (directSocksNetwork) ResolveUDPAddress(_ context.Context, address string) (*net.UDPAddr, error) {
++	return net.ResolveUDPAddr("udp4", address)
++}
++
++func startTestSocksServer(t *testing.T) *socksServer {
++	t.Helper()
++	server, err := startSocksServer("127.0.0.1:0", directSocksNetwork{}, nil)
++	if err != nil {
++		t.Fatalf("start SOCKS5 server: %v", err)
++	}
++	t.Cleanup(func() {
++		if err := server.Close(); err != nil {
++			t.Errorf("close SOCKS5 server: %v", err)
++		}
++	})
++	return server
++}
++
++func openTestSocksControl(t *testing.T, server *socksServer) net.Conn {
++	t.Helper()
++	connection, err := net.DialTimeout("tcp", server.Addr().String(), 2*time.Second)
++	if err != nil {
++		t.Fatalf("connect to SOCKS5 server: %v", err)
++	}
++	t.Cleanup(func() { _ = connection.Close() })
++	if _, err := connection.Write([]byte{socksVersion5, 1, socksMethodNoAuthentication}); err != nil {
++		t.Fatalf("write SOCKS5 greeting: %v", err)
++	}
++	response := make([]byte, 2)
++	if _, err := io.ReadFull(connection, response); err != nil {
++		t.Fatalf("read SOCKS5 greeting: %v", err)
++	}
++	if !reflect.DeepEqual(response, []byte{socksVersion5, socksMethodNoAuthentication}) {
++		t.Fatalf("unexpected SOCKS5 greeting response: %v", response)
++	}
++	return connection
++}
++
++func writeTestRequest(t *testing.T, connection net.Conn, command byte, destination socksAddress) {
++	t.Helper()
++	encodedAddress, err := marshalSocksAddress(destination)
++	if err != nil {
++		t.Fatalf("marshal SOCKS5 address: %v", err)
++	}
++	request := []byte{socksVersion5, command, 0}
++	request = append(request, encodedAddress...)
++	if _, err := connection.Write(request); err != nil {
++		t.Fatalf("write SOCKS5 request: %v", err)
++	}
++}
++
++func readTestReply(t *testing.T, connection net.Conn) (byte, socksAddress) {
++	t.Helper()
++	header := make([]byte, 3)
++	if _, err := io.ReadFull(connection, header); err != nil {
++		t.Fatalf("read SOCKS5 reply: %v", err)
++	}
++	if header[0] != socksVersion5 || header[2] != 0 {
++		t.Fatalf("invalid SOCKS5 reply header: %v", header)
++	}
++	address, err := readSocksAddress(connection)
++	if err != nil {
++		t.Fatalf("read SOCKS5 reply address: %v", err)
++	}
++	return header[1], address
++}
++
++func TestSocksConnect(t *testing.T) {
++	echoListener, err := net.Listen("tcp4", "127.0.0.1:0")
++	if err != nil {
++		t.Fatalf("listen for TCP echo: %v", err)
++	}
++	t.Cleanup(func() { _ = echoListener.Close() })
++	go func() {
++		connection, acceptError := echoListener.Accept()
++		if acceptError != nil {
++			return
++		}
++		defer connection.Close()
++		_, _ = io.Copy(connection, connection)
++	}()
++
++	server := startTestSocksServer(t)
++	control := openTestSocksControl(t, server)
++	writeTestRequest(t, control, socksCommandConnect, socksAddressFromNetAddress(echoListener.Addr()))
++	reply, _ := readTestReply(t, control)
++	if reply != socksReplySucceeded {
++		t.Fatalf("SOCKS5 CONNECT failed with reply %d", reply)
++	}
++
++	payload := []byte("proton-socks-tcp")
++	if _, err := control.Write(payload); err != nil {
++		t.Fatalf("write proxied TCP data: %v", err)
++	}
++	response := make([]byte, len(payload))
++	if _, err := io.ReadFull(control, response); err != nil {
++		t.Fatalf("read proxied TCP data: %v", err)
++	}
++	if !reflect.DeepEqual(response, payload) {
++		t.Fatalf("unexpected proxied TCP response: %q", response)
++	}
++}
++
++func TestSocksUDPAssociate(t *testing.T) {
++	echo, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
++	if err != nil {
++		t.Fatalf("listen for UDP echo: %v", err)
++	}
++	t.Cleanup(func() { _ = echo.Close() })
++	go func() {
++		buffer := make([]byte, 2048)
++		length, peer, readError := echo.ReadFromUDP(buffer)
++		if readError != nil {
++			return
++		}
++		_, _ = echo.WriteToUDP(buffer[:length], peer)
++	}()
++
++	server := startTestSocksServer(t)
++	control := openTestSocksControl(t, server)
++	writeTestRequest(t, control, socksCommandUDPAssociate, socksAddress{host: "0.0.0.0"})
++	reply, relayAddress := readTestReply(t, control)
++	if reply != socksReplySucceeded {
++		t.Fatalf("SOCKS5 UDP ASSOCIATE failed with reply %d", reply)
++	}
++
++	relay, err := net.ResolveUDPAddr("udp", relayAddress.String())
++	if err != nil {
++		t.Fatalf("resolve SOCKS5 UDP relay: %v", err)
++	}
++	client, err := net.DialUDP("udp", nil, relay)
++	if err != nil {
++		t.Fatalf("connect to SOCKS5 UDP relay: %v", err)
++	}
++	t.Cleanup(func() { _ = client.Close() })
++	if err := client.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
++		t.Fatalf("set SOCKS5 UDP deadline: %v", err)
++	}
++
++	payload := []byte("proton-socks-udp")
++	datagram, err := marshalSocksUDPDatagram(socksAddressFromNetAddress(echo.LocalAddr()), payload)
++	if err != nil {
++		t.Fatalf("marshal SOCKS5 UDP datagram: %v", err)
++	}
++	if _, err := client.Write(datagram); err != nil {
++		t.Fatalf("write SOCKS5 UDP datagram: %v", err)
++	}
++	response := make([]byte, 2048)
++	length, err := client.Read(response)
++	if err != nil {
++		t.Fatalf("read SOCKS5 UDP datagram: %v", err)
++	}
++	source, responsePayload, err := parseSocksUDPDatagram(response[:length])
++	if err != nil {
++		t.Fatalf("parse SOCKS5 UDP response: %v", err)
++	}
++	if source.port != uint16(echo.LocalAddr().(*net.UDPAddr).Port) {
++		t.Fatalf("unexpected SOCKS5 UDP source: %s", source.String())
++	}
++	if !reflect.DeepEqual(responsePayload, payload) {
++		t.Fatalf("unexpected proxied UDP response: %q", responsePayload)
++	}
++}
++
++func TestSocksListenerRequiresLoopback(t *testing.T) {
++	server, err := startSocksServer("0.0.0.0:0", directSocksNetwork{}, nil)
++	if err == nil {
++		_ = server.Close()
++		t.Fatal("SOCKS5 server accepted a non-loopback listener")
++	}
++}
++
++func TestSocksDomainAddressRoundTrip(t *testing.T) {
++	want := socksAddress{host: "example.com", port: 443}
++	encoded, err := marshalSocksAddress(want)
++	if err != nil {
++		t.Fatalf("marshal SOCKS5 address: %v", err)
++	}
++	got, err := readSocksAddress(bytes.NewReader(encoded))
++	if err != nil {
++		t.Fatalf("read SOCKS5 address: %v", err)
++	}
++	if got != want {
++		t.Fatalf("SOCKS5 address mismatch: got %#v, want %#v", got, want)
++	}
++}

@@ -52,6 +52,8 @@ struct QuickSettingDetailFeature {
         /// authoritative only when this is `true`; for B2C accounts (free or paid) we keep the full
         /// level list visible and rely on tier-based upsell affordances for free users.
         var isBusinessAccount: Bool
+        var socksListenPort: String = String(ProtonSocksSettings.listenPort)
+        var socksPortMessage: String?
 
         @SharedReader(.userTier) var userTier: Int?
 
@@ -90,7 +92,7 @@ struct QuickSettingDetailFeature {
                     ),
                 ]
             case .netShieldDisplay:
-                netShieldOptions
+                []
             case .killSwitchDisplay:
                 [
                     .init(
@@ -206,6 +208,8 @@ struct QuickSettingDetailFeature {
     enum Action {
         case learnMoreTapped
         case optionTapped(QuickSettingOptionID)
+        case socksPortChanged(String)
+        case saveSocksPort
         case upgradeTapped
         case delegate(Delegate)
 
@@ -223,6 +227,19 @@ struct QuickSettingDetailFeature {
             switch action {
             case .learnMoreTapped:
                 linkOpener.open(state.type.learnMoreLink)
+                return .none
+            case let .socksPortChanged(port):
+                state.socksListenPort = port.filter(\.isNumber)
+                state.socksPortMessage = nil
+                return .none
+            case .saveSocksPort:
+                guard let port = UInt16(state.socksListenPort), port > 0 else {
+                    state.socksPortMessage = "Enter a port from 1 to 65535."
+                    return .none
+                }
+                ProtonSocksSettings.listenPort = port
+                state.socksListenPort = String(port)
+                state.socksPortMessage = "Saved: socks5://127.0.0.1:\(port)"
                 return .none
             case let .optionTapped(option):
                 return .send(.delegate(.option(state.type, option)))

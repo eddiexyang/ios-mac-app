@@ -273,59 +273,10 @@ extension AppDelegate: NSApplicationDelegate {
     }
 
     private func checkSysexAndAdjustGlobalProtocol() {
-        let connectionProtocol = propertiesManager.connectionProtocol
-        if connectionProtocol.isDeprecated {
-            // At this time on MacOS, OpenVPN is the only deprecated protocol, and it requires sysex approval, so can
-            // safely fall back to smart protocol.
-            propertiesManager.connectionProtocol = .smartProtocol
+        if case .vpnProtocol(.wireGuard) = propertiesManager.connectionProtocol {
+            return
         }
-
-        // For new installations, we also ask for plutonium extension installation.
-        let includedExtensionTypes: [SystemExtensionType] = propertiesManager.isSubsequentLaunch ? [.wireGuard] : [.wireGuard, .plutonium]
-
-        container
-            .makeSystemExtensionManager()
-            .installOrUpdateExtensionsIfNeeded(shouldStartTour: true, includedTypes: includedExtensionTypes) { _, individualResults in
-                // Check WireGuard installation for protocol fallback logic
-                if let wireGuardResult = individualResults[.wireGuard] {
-                    switch wireGuardResult {
-                    case let .success(success):
-                        switch success {
-                        case .installed, .upgraded:
-                            // Switch away from ike to smart protocol if wireGuard succeeded.
-                            if self.propertiesManager.connectionProtocol == .vpnProtocol(.ike) {
-                                self.propertiesManager.connectionProtocol = .smartProtocol
-                            }
-                        case .alreadyThere:
-                            break
-                        }
-                    case .failure:
-                        // Either we lost sysex approval, or are upgrading from an earlier version which didn't have this check
-                        log.warning("\(self.propertiesManager.connectionProtocol) requires sysex (WireGuard not installed), reverting to IKEv2", category: .sysex)
-                        self.propertiesManager.connectionProtocol = .vpnProtocol(.ike)
-                        @Shared(.plutoniumFeature) var feature: PlutoniumFeatureToggle
-                        log.debug("Disabling Plutonium feature because the WireGuard extension is not installed.")
-                        $feature.withLock {
-                            $0.disable()
-                        }
-                    }
-                }
-
-                // Check Plutonium installation and log if it failed
-                if let plutoniumResult = individualResults[.plutonium] {
-                    switch plutoniumResult {
-                    case .success:
-                        log.info("Plutonium extension installed successfully", category: .sysex)
-                    case let .failure(error):
-                        log.warning("Plutonium extension installation failed: \(error)", category: .sysex)
-                        @Shared(.plutoniumFeature) var feature: PlutoniumFeatureToggle
-                        log.debug("Disabling Plutonium feature because the system extension is not installed.")
-                        $feature.withLock {
-                            $0.disable()
-                        }
-                    }
-                }
-            }
+        propertiesManager.connectionProtocol = .vpnProtocol(.wireGuard(.udp))
     }
 
     private func startedAtLogin() -> Bool {

@@ -46,17 +46,23 @@ struct QuickSettingDetailView: View {
                         .accessibilityIdentifier("QSDescription")
                 }
 
-                QuickSettingLearnMoreButton(action: { store.send(.learnMoreTapped) })
+                if store.type != .netShieldDisplay {
+                    QuickSettingLearnMoreButton(action: { store.send(.learnMoreTapped) })
+                }
             }
 
-            VStack(spacing: .themeSpacing8) {
-                ForEach(store.selectedOptions) { option in
-                    QuickSettingsDropdownOption(
-                        title: option.title,
-                        icon: option.icon,
-                        style: optionStyle(for: option)
-                    ) {
-                        store.send(.optionTapped(option.id))
+            if store.type == .netShieldDisplay {
+                socksPortEditor
+            } else {
+                VStack(spacing: .themeSpacing8) {
+                    ForEach(store.selectedOptions) { option in
+                        QuickSettingsDropdownOption(
+                            title: option.title,
+                            icon: option.icon,
+                            style: optionStyle(for: option)
+                        ) {
+                            store.send(.optionTapped(option.id))
+                        }
                     }
                 }
             }
@@ -87,6 +93,37 @@ struct QuickSettingDetailView: View {
 
     private var shouldShowUpgradeButton: Bool {
         store.showUpgradeButton
+    }
+
+    private var socksPortEditor: some View {
+        VStack(alignment: .leading, spacing: .themeSpacing8) {
+            Text("socks5://127.0.0.1")
+                .themeFont(.footnote())
+                .foregroundStyle(Color(.text, .weak))
+
+            HStack(spacing: .themeSpacing8) {
+                TextField(
+                    "10808",
+                    text: Binding(
+                        get: { store.socksListenPort },
+                        set: { store.send(.socksPortChanged($0)) }
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("ProtonSocksPortField")
+
+                Button("Save") {
+                    store.send(.saveSocksPort)
+                }
+                .accessibilityIdentifier("ProtonSocksPortSave")
+            }
+
+            if let message = store.socksPortMessage {
+                Text(message)
+                    .themeFont(.footnote())
+                    .foregroundStyle(Color(.text, .weak))
+            }
+        }
     }
 
     private func netShieldStatsView(model: NetShieldModel) -> some View {

@@ -1,0 +1,100 @@
+name: macOS SOCKS5 build
+
+on:
+  push:
+    branches:
+      - codex/socks5-transport
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-socks5-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out Proton VPN
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Check out public submodules
+        run: |
+          git config submodule.external/protoncore.url https://github.com/ProtonMail/protoncore_ios.git
+          git config submodule.external/apple-fusion.url https://github.com/ProtonMail/apple-fusion.git
+          git config submodule.external/wireguard-apple.url https://github.com/ProtonVPN/wireguard-apple.git
+          git submodule update --init --depth 1 \
+            external/protoncore \
+            external/apple-fusion \
+            external/wireguard-apple
+
+      - name: Apply WireGuard SOCKS5 patch
+        run: |
+          git -C external/wireguard-apple apply --check --unidiff-zero "$GITHUB_WORKSPACE/.github/patches/wireguard-socks5.patch"
+          git -C external/wireguard-apple apply --unidiff-zero "$GITHUB_WORKSPACE/.github/patches/wireguard-socks5.patch"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.2
+          cache-dependency-path: external/wireguard-apple/Sources/WireGuardKitGo/go.sum
+
+      - name: Test userspace WireGuard and SOCKS5
+        working-directory: external/wireguard-apple/Sources/WireGuardKitGo
+        run: |
+          go test ./...
+          go test -race ./...
+
+      - name: Prepare public build constants
+        run: cp apps/macos/ProtonVPN/ObfuscatedConstants.example.swift apps/macos/ProtonVPN/ObfuscatedConstants.swift
+
+      - name: Resolve Swift packages
+        run: |
+          git config --global url.https://github.com/ProtonMail/apple-fusion.git.insteadOf git@gitlab.protontech.ch:tpe/apple-fusion.git
+          xcodebuild \
+            -resolvePackageDependencies \
+            -workspace ProtonVPN.xcworkspace \
+            -scheme ProtonVPN-macOS
+
+      - name: Build Proton VPN for macOS
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ProtonVPN.xcworkspace \
+            -scheme ProtonVPN-macOS \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath "$RUNNER_TEMP/ProtonVPNDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= \
+            ONLY_ACTIVE_ARCH=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Package unsigned app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app" \
+            "$RUNNER_TEMP/ProtonVPN-SOCKS5-unsigned.zip"
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProtonVPN-SOCKS5-unsigned
+          path: ${{ runner.temp }}/ProtonVPN-SOCKS5-unsigned.zip
+          if-no-files-found: error
+
+      - name: Upload Xcode log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore

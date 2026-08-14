@@ -66,10 +66,7 @@ public enum ConnectionProtocol: Equatable, Hashable, CaseIterable, Sendable, Cod
 
     #if os(macOS)
         public var requiresSystemExtension: Bool {
-            guard self != .smartProtocol else {
-                return true
-            }
-            return vpnProtocol?.requiresSystemExtension == true
+            false
         }
     #endif
 
@@ -93,12 +90,7 @@ public extension ConnectionProtocol {
 #if os(macOS)
     public extension VpnProtocol {
         var requiresSystemExtension: Bool {
-            switch self {
-            case .wireGuard:
-                true
-            default:
-                false
-            }
+            false
         }
     }
 #endif
