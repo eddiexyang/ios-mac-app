@@ -956,7 +956,7 @@ public final class VpnManager: VpnManagerProtocol {
         log.info("VPN update state to \(state.logDescription)", category: .connection, event: .change, metadata: [
             "oldState": "\(oldState.logDescription)",
             "state": "\(newState.logDescription)",
-            "currentProtocol": currentVpnProtocol.map { String(describing: $0) } ?? "nil",
+            "currentProtocol": .string(currentVpnProtocol.map { String(describing: $0) } ?? "nil"),
         ])
 
         #if os(macOS)
