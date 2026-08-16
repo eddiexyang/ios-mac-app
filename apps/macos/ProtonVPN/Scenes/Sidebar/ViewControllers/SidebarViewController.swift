@@ -410,7 +410,7 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
 
         expandButton.target = self
         expandButton.action = #selector(expandButtonAction(_:))
-        expandButton.expandState = .compact
+        expandButton.expandState = .expanded
         applyExpandButtonLayoutDirection()
     }
 

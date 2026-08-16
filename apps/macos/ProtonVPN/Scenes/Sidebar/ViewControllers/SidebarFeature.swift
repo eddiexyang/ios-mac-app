@@ -33,7 +33,7 @@ struct SidebarFeature {
         var selectedTab: SidebarTab = .countries
         var isLoadingOverlayVisible = false
         var isOverlayWindowPresented = false
-        var expandState: ExpandState = .compact
+        var expandState: ExpandState = .expanded
         var mapWidth: CGFloat = 600
         var isFullscreen = false
         var isOccludedVisible = true

@@ -126,10 +126,10 @@ struct SidebarFeatureTests {
         let store = makeStore()
 
         await store.send(.expandButtonTapped) {
-            $0.expandState = .expanded
+            $0.expandState = .compact
         }
         await store.send(.expandButtonTapped) {
-            $0.expandState = .compact
+            $0.expandState = .expanded
         }
     }
 

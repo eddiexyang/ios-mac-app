@@ -21,6 +21,7 @@
 //
 
 import Cocoa
+import Theme
 
 class SidebarWindowController: WindowController {
     @available(*, unavailable)
@@ -53,16 +54,22 @@ class SidebarWindowController: WindowController {
         window.styleMask.insert(.closable)
         window.styleMask.insert(.miniaturizable)
 
-        if !AppLaunchRoutine.launchedBefore {
-            let initialWidth: CGFloat = 1200
-            let initialHeight: CGFloat = 600
-            let initialX = window.frame.origin.x - (initialWidth - window.frame.size.width) / 2
-            window.setFrameOrigin(CGPoint(x: initialX, y: window.frame.origin.y))
-            window.setContentSize(CGSize(width: initialWidth, height: initialHeight))
+        if window.contentLayoutRect.width <= Dimensions.maximumCompactWidth {
+            let expandedWidth = Dimensions.defaultExpandedWidth
+            let expandedHeight = max(window.contentLayoutRect.height, Dimensions.defaultHeight)
+            let expandedX = window.frame.origin.x - (expandedWidth - window.frame.size.width) / 2
+            window.setFrameOrigin(CGPoint(x: expandedX, y: window.frame.origin.y))
+            window.setContentSize(CGSize(width: expandedWidth, height: expandedHeight))
         }
     }
 
     private func setupControls() {
         monitorsKeyEvents = true
+    }
+
+    private enum Dimensions {
+        static let maximumCompactWidth = UIConstants.Windows.sidebarWidth + 1
+        static let defaultExpandedWidth: CGFloat = 1200
+        static let defaultHeight: CGFloat = 600
     }
 }
