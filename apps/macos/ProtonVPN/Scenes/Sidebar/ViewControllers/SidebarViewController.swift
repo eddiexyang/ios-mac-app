@@ -47,7 +47,7 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     private var headerViewController: HeaderViewController!
     private var activeController: NSViewController!
 
-    private var overlayWindowController: ConnectingWindowController?
+    private var overlayViewController: ConnectingViewController?
     private var fadeOutOverlayTask: DispatchWorkItem?
     private var isAnimatingMapResize = false
     private var loading = false
@@ -219,21 +219,23 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     // MARK: - Private
 
     private func showLoadingOverlay(with viewModel: ConnectingOverlayViewModel) {
-        guard let window = view.window else { return }
-
-        if let overlayWindow = overlayWindowController?.window, let childWindows = window.childWindows {
-            if childWindows.contains(overlayWindow) {
-                return // window is already displayed
-            }
-        }
+        guard view.window != nil, overlayViewController == nil else { return }
 
         let connectingViewController = ConnectingViewController(viewModel: viewModel)
-        overlayWindowController = ConnectingWindowController(viewController: connectingViewController)
+        overlayViewController = connectingViewController
 
         connectionOverlay.isHidden = false
-        window.addChildWindow(overlayWindowController!.window!, ordered: .above)
-        resizeOverlayWindow()
-        overlayWindowController!.window!.makeKey()
+        // Keep the connecting UI in the main window. Ordering a child window can
+        // trip macOS 27's NSRemoteView consistency assertion.
+        addChild(connectingViewController)
+        connectingViewController.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(connectingViewController.view, positioned: .above, relativeTo: connectionOverlay)
+        NSLayoutConstraint.activate([
+            connectingViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            connectingViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            connectingViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            connectingViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
         store.send(.overlayWindowPresentedChanged(true))
     }
 
@@ -269,51 +271,37 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     }
 
     private func removeConnectingOverlay(animated: Bool = false) {
-        guard let window = view.window else { return }
-
         overlayViewModel = nil
 
-        if let overlayWindowController, let overlayWindow = overlayWindowController.window, let viewController = overlayWindowController.contentViewController as? ConnectingViewController {
-            connectionOverlay.stopBlurAnimation()
-            viewController.stopAnimatingFade()
+        guard let overlayViewController else { return }
 
-            if animated {
-                if !connectionOverlay.isHidden {
-                    connectionOverlay.removeBlur(over: Dimensions.overlayFadeDuration) { [weak self] in
-                        guard let self else {
-                            return
-                        }
+        connectionOverlay.stopBlurAnimation()
+        overlayViewController.stopAnimatingFade()
+        guard self.overlayViewController === overlayViewController else { return }
 
-                        connectionOverlay.isHidden = true
-                    }
+        if animated {
+            if !connectionOverlay.isHidden {
+                connectionOverlay.removeBlur(over: Dimensions.overlayFadeDuration) { [weak self] in
+                    self?.connectionOverlay.isHidden = true
                 }
-
-                viewController.fade(over: Dimensions.overlayFadeDuration, completion: { [weak self] in
-                    window.removeChildWindow(overlayWindow)
-                    overlayWindowController.close()
-                    self?.overlayWindowController = nil
-                    self?.store.send(.overlayWindowPresentedChanged(false))
-                })
-            } else {
-                connectionOverlay.isHidden = true
-
-                window.removeChildWindow(overlayWindow)
-                overlayWindowController.close()
-                self.overlayWindowController = nil
-                store.send(.overlayWindowPresentedChanged(false))
             }
+
+            overlayViewController.fade(over: Dimensions.overlayFadeDuration) { [weak self, weak overlayViewController] in
+                guard let self, let overlayViewController else { return }
+                self.removeConnectingOverlayViewController(overlayViewController)
+            }
+        } else {
+            connectionOverlay.isHidden = true
+            removeConnectingOverlayViewController(overlayViewController)
         }
     }
 
-    private func resizeOverlayWindow() {
-        guard let overlayWindowController,
-              let window = view.window,
-              let contentView = window.contentView else { return }
-
-        let windowRect = window.frame
-        let contentRect = contentView.frame
-
-        overlayWindowController.window?.setFrame(CGRect(x: windowRect.origin.x, y: windowRect.origin.y, width: contentRect.width, height: contentRect.height), display: true)
+    private func removeConnectingOverlayViewController(_ viewController: ConnectingViewController) {
+        guard overlayViewController === viewController else { return }
+        viewController.view.removeFromSuperview()
+        viewController.removeFromParent()
+        overlayViewController = nil
+        store.send(.overlayWindowPresentedChanged(false))
     }
 
     private func buildViewHierarchy(in rootView: NSView) {
@@ -512,7 +500,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
         }
         setViewController(forTab: selectedTab)
         applyExpandState(store.expandState)
-        resizeOverlayWindow()
     }
 
     private func applyLoadingOverlayState() {
