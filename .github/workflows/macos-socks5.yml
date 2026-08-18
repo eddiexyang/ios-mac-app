@@ -71,7 +71,7 @@ jobs:
             -workspace ProtonVPN-SOCKS5.xcworkspace \
             -scheme ProtonVPN-macOS \
             -skipMacroValidation \
-            -configuration Debug \
+            -configuration Release \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath "$RUNNER_TEMP/ProtonVPNDerivedData" \
             CODE_SIGNING_ALLOWED=NO \
@@ -84,9 +84,9 @@ jobs:
       - name: Build and embed userspace SOCKS5 helper
         run: |
           set -euo pipefail
-          WG_LIBRARY_DIR="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug"
+          WG_LIBRARY_DIR="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release"
           HELPER_BUILD_DIR="$RUNNER_TEMP/ProtonSocksHelperBuild"
-          APP_PATH="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+          APP_PATH="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release/ProtonVPN.app"
 
           test -f "$WG_LIBRARY_DIR/libwg-go.a"
           swift build \
@@ -115,12 +115,9 @@ jobs:
       - name: Verify Go runtime process isolation
         run: |
           set -euo pipefail
-          APP_PATH="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+          APP_PATH="$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release/ProtonVPN.app"
           MAIN_IMAGE="$APP_PATH/Contents/MacOS/ProtonVPN"
           HELPER_IMAGE="$APP_PATH/Contents/Helpers/ProtonSocksHelper"
-          if test -f "$APP_PATH/Contents/MacOS/ProtonVPN.debug.dylib"; then
-            MAIN_IMAGE="$APP_PATH/Contents/MacOS/ProtonVPN.debug.dylib"
-          fi
 
           test "$(nm "$MAIN_IMAGE" | grep -c '_go:buildinfo$')" -eq 1
           test "$(nm "$MAIN_IMAGE" | grep -c '_runtime.raise_trampoline.abi0$')" -eq 1
@@ -140,17 +137,17 @@ jobs:
       - name: Ad-hoc sign app for local execution
         run: |
           codesign --force --sign - --timestamp=none \
-            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app/Contents/Helpers/ProtonSocksHelper"
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release/ProtonVPN.app/Contents/Helpers/ProtonSocksHelper"
           codesign --force --deep --sign - --timestamp=none \
-            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release/ProtonVPN.app"
           codesign --verify --deep --strict --verbose=4 \
-            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app"
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release/ProtonVPN.app"
 
       - name: Package ad-hoc signed disk image
         run: |
           mkdir -p "$RUNNER_TEMP/ProtonVPN-SOCKS5-dmg"
           ditto \
-            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Debug/ProtonVPN.app" \
+            "$RUNNER_TEMP/ProtonVPNDerivedData/Build/Products/Release/ProtonVPN.app" \
             "$RUNNER_TEMP/ProtonVPN-SOCKS5-dmg/ProtonVPN.app"
           ln -s /Applications "$RUNNER_TEMP/ProtonVPN-SOCKS5-dmg/Applications"
           hdiutil create \
