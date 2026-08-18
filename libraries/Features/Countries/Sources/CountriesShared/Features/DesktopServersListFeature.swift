@@ -18,6 +18,7 @@
 
 import ComposableArchitecture
 import Domain
+import Persistence
 
 @Reducer
 public struct DesktopServersListFeature: Sendable {
