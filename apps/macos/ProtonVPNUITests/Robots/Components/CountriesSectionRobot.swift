@@ -37,14 +37,14 @@ class CountriesSectionRobot: CoreElements {
     }
 
     func expandCountry(country: String) -> CountriesSectionRobot {
-        // expanding country by clicking on country row
-        cell(country).tapInCenter()
+        // The country row has separate Connect and expand buttons. Click the trailing expand control.
+        cell(country).tapInCenter(dx: 0.95)
         return self
     }
 
     func expandCountry() -> CountriesSectionRobot {
-        // tap on first row at servers list table
-        table(serverListTableId).onChild(tableRow().byIndex(1)).tapInCenter()
+        // Tap the trailing expand control on the first country row.
+        table(serverListTableId).onChild(tableRow().byIndex(1)).tapInCenter(dx: 0.95)
         return self
     }
 

@@ -86,12 +86,16 @@ struct ConnectServerOnClickButton: View {
         }
     }
 
+    var isUsersTierTooLow: Bool {
+        (userTier ?? .freeTier) < serverInfo.logical.tier
+    }
+
     var isDisabled: Bool {
-        serverInfo.logical.isUnderMaintenance || userTier?.isFreeTier == true
+        serverInfo.logical.isUnderMaintenance || isUsersTierTooLow
     }
 
     var help: String {
-        guard userTier?.isFreeTier != true else {
+        guard !isUsersTierTooLow else {
             return Localizable.upgradeToPlus
         }
 

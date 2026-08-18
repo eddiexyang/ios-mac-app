@@ -143,9 +143,14 @@ package struct ConnectionIntentResolver: DependencyKey, Sendable {
             log.assertionFailure("Free user requested connection to gateway", category: .connection)
             throw .specificCountryUnavailable(countryCode: name)
 
-        // Free users aren't allowed to choose an exact server.
+        // Free users may choose a location when it resolves to a server available on their tier.
         case let .country(code, _), let .city(_, code, _), let .state(_, code, _), let .exact(_, _, _, _, code):
-            throw .specificCountryUnavailable(countryCode: code)
+            @Dependency(\.serverSelector) var serverSelector
+            do {
+                _ = try serverSelector.select(intent.spec, userTier, intent.acceptableProtocols)
+            } catch {
+                throw .specificCountryUnavailable(countryCode: code)
+            }
 
         case .secureCore:
             throw .secureCoreUnavailable

@@ -32,7 +32,7 @@ public enum CityStateConnectionSpecFactory {
         }
 
         return .exact(
-            .paid,
+            server.logical.tier.isFreeTier ? .free : .paid,
             logicalID: server.logical.id,
             number: server.logical.serverNameComponents.sequence,
             subregion: subregion,

@@ -32,6 +32,7 @@ public enum CityStateListType: Equatable, Sendable {
 
     public init(groupInfo: ServerGroupInfo, search: String, secureCore: Bool) {
         @Dependency(\.serverRepository) var repository
+        let tierFilters = Self.currentUserTierFilters
         switch groupInfo.kind {
         case .city:
             assertionFailure("Unexpected grouping kind: \(groupInfo.kind)")
@@ -41,38 +42,42 @@ public enum CityStateListType: Equatable, Sendable {
             self = .states([groupInfo]) // never gets executed
         case let .country(code):
             if secureCore {
+                let filters: [VPNServerFilter] = [
+                    .kind(.country(code: code)),
+                    .features(.secureCore),
+                    .matches(search),
+                    ProtocolFilters().supportedProtocolsFilter,
+                ] + tierFilters
                 let secureCores = repository
-                    .getServers(filteredBy: [
-                        .kind(.country(code: code)),
-                        .features(.secureCore),
-                        .matches(search),
-                        ProtocolFilters().supportedProtocolsFilter,
-                    ], orderedBy: .nameAscending)
+                    .getServers(filteredBy: filters, orderedBy: .nameAscending)
                 self = .secureCores(secureCores)
             } else {
                 self = .init(countryCode: code, search: search)
             }
         case let .gateway(name):
+            let filters: [VPNServerFilter] = [
+                .kind(.gateway(name: name)),
+                .matches(search),
+                ProtocolFilters().supportedProtocolsFilter,
+            ] + tierFilters
             let gateways = repository
-                .getServers(filteredBy: [
-                    .kind(.gateway(name: name)),
-                    .matches(search),
-                    ProtocolFilters().supportedProtocolsFilter,
-                ], orderedBy: .nameAscending)
+                .getServers(filteredBy: filters, orderedBy: .nameAscending)
             self = .gateways(gateways)
         }
     }
 
     public init(countryCode: String, search: String) {
         @Dependency(\.serverRepository) var repository
+        let tierFilters = Self.currentUserTierFilters
+        let baseFilters: [VPNServerFilter] = [
+            .isNotUnderMaintenance,
+            .kind(.country(code: countryCode)),
+            .matches(search),
+            ProtocolFilters().supportedProtocolsFilter,
+        ] + tierFilters
         let states = repository
             .getGroups(
-                filteredBy: [
-                    .isNotUnderMaintenance,
-                    .kind(.country(code: countryCode)),
-                    .matches(search),
-                    ProtocolFilters().supportedProtocolsFilter,
-                ],
+                filteredBy: baseFilters,
                 groupedBy: .stateName
             ).filter { element in
                 guard case .state = element.kind else { return false }
@@ -86,12 +91,7 @@ public enum CityStateListType: Equatable, Sendable {
 
         let cities = repository
             .getGroups(
-                filteredBy: [
-                    .isNotUnderMaintenance,
-                    .kind(.country(code: countryCode)),
-                    .matches(search),
-                    ProtocolFilters().supportedProtocolsFilter,
-                ],
+                filteredBy: baseFilters,
                 groupedBy: .cityName
             ).filter { element in
                 guard case .city = element.kind else { return false }
@@ -99,6 +99,14 @@ public enum CityStateListType: Equatable, Sendable {
             }
 
         self = .cities(cities)
+    }
+
+    private static var currentUserTierFilters: [VPNServerFilter] {
+        @SharedReader(.userTier) var userTier: Int?
+        guard (userTier ?? .freeTier).isFreeTier else {
+            return []
+        }
+        return [.tier(.max(tier: .freeTier))]
     }
 }
 

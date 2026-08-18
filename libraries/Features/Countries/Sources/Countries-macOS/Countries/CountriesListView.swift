@@ -94,7 +94,10 @@ public struct CountriesListView: View {
                     .id(store.id)
             }
         } header: {
-            sectionHeader(title: Localizable.locationsAll(store.countries.count), action: .infoButtonTappedCountries)
+            sectionHeader(
+                title: store.isFreeTier ? Localizable.locationsFree : Localizable.locationsAll(store.countries.count),
+                action: .infoButtonTappedCountries
+            )
         }
     }
 

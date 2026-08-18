@@ -38,27 +38,27 @@ public struct CityStateListView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                Button {
-                    store.send(.expand)
-                } label: {
-                    HStack {
-                        Spacer()
-                        Theme.Asset.Icons.chevronDownFilled.swiftUIImage
-                            .resizable()
-                            .rotationEffect(store.isExpanded ? .degrees(-180) : .degrees(0))
-                            .foregroundColor(store.isExpanded ? Color(.icon) : Color(.icon, .weak))
-                            .frame(.square(.themeSpacing20))
-                    }
-                    .padding(.themeSpacing12)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.ghost)
-
+            HStack(spacing: 0) {
                 ConnectOnClickButton(
                     action: { store.send(.connectToCountry) },
                     groupInfo: store.groupInfo
                 )
+                .frame(maxWidth: .infinity)
+
+                Button {
+                    store.send(.expand)
+                } label: {
+                    Theme.Asset.Icons.chevronDownFilled.swiftUIImage
+                        .resizable()
+                        .rotationEffect(store.isExpanded ? .degrees(-180) : .degrees(0))
+                        .foregroundColor(store.isExpanded ? Color(.icon) : Color(.icon, .weak))
+                        .frame(.square(.themeSpacing20))
+                        .frame(width: .themeSpacing48)
+                        .padding(.vertical, .themeSpacing12)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.ghost)
+                .accessibilityIdentifier("ExpandLocationButton-\(store.id)")
             }
 
             if store.isExpanded {
@@ -86,9 +86,10 @@ public struct CityStateListView: View {
     private func list(_ groups: [ServerGroupInfo]) -> some View {
         LazyVStack(spacing: 0) {
             ForEach(groups, id: \.serverOfferingID) { groupInfo in
-                ZStack {
-                    expandButton(groupInfo)
+                HStack(spacing: 0) {
                     ConnectOnClickButton(action: { store.send(.connectTo(groupInfo)) }, groupInfo: groupInfo)
+                        .frame(maxWidth: .infinity)
+                    expandButton(groupInfo)
                 }
             }
         }
@@ -98,16 +99,15 @@ public struct CityStateListView: View {
         Button {
             store.send(.navigateToServers(groupInfo))
         } label: {
-            HStack {
-                Spacer()
-                Theme.Asset.Icons.threeDotsVertical.swiftUIImage
-                    .resizable()
-                    .foregroundColor(Color(.icon, .weak))
-                    .frame(.square(.themeSpacing20))
-            }
-            .padding(.themeSpacing12)
-            .contentShape(Rectangle())
+            Theme.Asset.Icons.threeDotsVertical.swiftUIImage
+                .resizable()
+                .foregroundColor(Color(.icon, .weak))
+                .frame(.square(.themeSpacing20))
+                .frame(width: .themeSpacing48)
+                .padding(.vertical, .themeSpacing12)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.ghost)
+        .accessibilityIdentifier("ShowServersButton-\(groupInfo.serverOfferingID)")
     }
 }

@@ -87,5 +87,49 @@
 
             await store.send(.searchText("us"))
         }
+
+        @Test("free location groups are filtered to the free tier")
+        func freeLocationGroupsAreFilteredToFreeTier() {
+            let capturedFilters = LockIsolated<[[String]]>([])
+
+            withDependencies {
+                $0.serverRepository = .init(
+                    serverCount: { 0 },
+                    countryCount: { 0 },
+                    upsertServers: { _ in },
+                    deleteServers: { _, _ in 0 },
+                    upsertLoads: { _ in },
+                    groups: { filters, _, _ in
+                        capturedFilters.withValue { $0.append(filters.map(\.description)) }
+                        return []
+                    },
+                    servers: { _, _ in [] },
+                    server: { _, _ in nil },
+                    getMetadata: { _ in nil },
+                    setMetadata: { _, _ in },
+                    closeConnection: {}
+                )
+            } operation: {
+                let feature = CountriesListFeature()
+                _ = feature.groups(
+                    with: .country,
+                    search: "",
+                    expandedCountryCode: nil,
+                    secureCore: false,
+                    freeOnly: true
+                )
+                _ = feature.groups(
+                    with: .country,
+                    search: "",
+                    expandedCountryCode: nil,
+                    secureCore: false,
+                    freeOnly: false
+                )
+            }
+
+            #expect(capturedFilters.value.count == 2)
+            #expect(capturedFilters.value[0].contains("|maxTier=0"))
+            #expect(!capturedFilters.value[1].contains("|maxTier=0"))
+        }
     }
 #endif

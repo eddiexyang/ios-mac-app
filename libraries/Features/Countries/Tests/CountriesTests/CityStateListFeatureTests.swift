@@ -45,4 +45,28 @@ struct CityStateListFeatureTests {
 //            $0.listState = .loaded(.states([]))
         }
     }
+
+    @Test("Specific server locations preserve the server tier")
+    func specificServerLocationsPreserveTier() {
+        let cases: [(tier: Int, expected: ConnectionSpec.Server)] = [
+            (.freeTier, .free),
+            (.paidTier, .paid),
+        ]
+
+        for testCase in cases {
+            let server = ServerInfo(
+                logical: .server(name: "US-NY#1", exitCountryCode: "US", tier: testCase.tier, city: "New York"),
+                protocolSupport: .all
+            )
+            let location = CityStateConnectionSpecFactory.serverLocation(for: server, subregion: "New York")
+
+            guard case let .exact(serverTier, logicalID, _, _, _) = location else {
+                Issue.record("Expected an exact server location")
+                continue
+            }
+
+            #expect(serverTier == testCase.expected)
+            #expect(logicalID == server.logical.id)
+        }
+    }
 }

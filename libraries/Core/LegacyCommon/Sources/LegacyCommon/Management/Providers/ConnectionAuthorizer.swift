@@ -60,12 +60,11 @@ extension ConnectionAuthorizer: DependencyKey {
                     ))
                 }
 
-            case let .city(_, code), let .state(_, code), let .country(code, _):
-                guard credentials.tier.isFreeTier else {
-                    return .success
-                }
-
-                return .failure(.specificCountryUnavailable(countryCode: code))
+            case .city, .state, .country:
+                // The legacy server selector applies the user's tier before connecting. Let free users
+                // choose locations that contain free servers and keep the existing upgrade resolution
+                // for paid-only locations.
+                return .success
 
             case let .gateway(name):
                 guard credentials.tier.isFreeTier else {

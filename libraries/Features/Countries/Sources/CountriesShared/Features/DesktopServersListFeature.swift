@@ -46,6 +46,7 @@ public struct DesktopServersListFeature: Sendable {
 
     @Dependency(\.serverRepository) var repository
     @SharedReader(.secureCoreToggle) var secureCore: Bool
+    @SharedReader(.userTier) var userTier: Int?
 
     public init() {}
 
@@ -53,14 +54,19 @@ public struct DesktopServersListFeature: Sendable {
         Reduce { state, action in
             switch action {
             case .didAppear:
-                return .run { [kind = state.kind, search = state.search] send in
+                return .run { [kind = state.kind, search = state.search, freeOnly = (userTier ?? .freeTier).isFreeTier] send in
+                    var filters: [VPNServerFilter] = [
+                        .kind(kind.serverTypeFilter),
+                        .features(secureCore ? .secureCore : .standard),
+                        .matches(search),
+                        ProtocolFilters().supportedProtocolsFilter,
+                    ]
+                    if freeOnly {
+                        filters.append(.tier(.max(tier: .freeTier)))
+                    }
+
                     let servers = repository.getServers(
-                        filteredBy: [
-                            .kind(kind.serverTypeFilter),
-                            .features(secureCore ? .secureCore : .standard),
-                            .matches(search),
-                            ProtocolFilters().supportedProtocolsFilter,
-                        ],
+                        filteredBy: filters,
                         orderedBy: .loadAscending
                     )
                     await send(.loaded(servers))

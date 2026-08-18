@@ -55,7 +55,7 @@ public struct CountriesListFeature: Sendable {
         public var searchText: String = ""
         var isFreeTier: Bool {
             @SharedReader(.userTier) var userTier: Int?
-            return userTier?.isFreeTier ?? false
+            return (userTier ?? .freeTier).isFreeTier
         }
 
         // Stored so that we can collapse the previously expanded section
@@ -193,20 +193,22 @@ public struct CountriesListFeature: Sendable {
                 return .none
             case let .getGroups(secureCore):
                 state.listState = .loading
-                return .run { [search = state.searchText, expandedCode = state.expandedCountryCode] send in
+                return .run { [search = state.searchText, expandedCode = state.expandedCountryCode, freeOnly = state.isFreeTier] send in
                     await send(.loadOfferBanner)
 
                     let countries = groups(
                         with: .country,
                         search: search,
                         expandedCountryCode: expandedCode,
-                        secureCore: secureCore
+                        secureCore: secureCore,
+                        freeOnly: freeOnly
                     )
                     let gateways = groups(
                         with: .gateway,
                         search: search,
                         expandedCountryCode: expandedCode,
-                        secureCore: secureCore
+                        secureCore: secureCore,
+                        freeOnly: freeOnly
                     )
                     await send(.loadingFinished(countries: countries, gateways: gateways))
                 }
@@ -271,17 +273,23 @@ public struct CountriesListFeature: Sendable {
         with kind: VPNServerFilter.ServerTypeFilter,
         search: String,
         expandedCountryCode: String?,
-        secureCore: Bool
+        secureCore: Bool,
+        freeOnly: Bool
     ) -> IdentifiedArrayOf<DesktopCityStateListFeature.State> {
+        var filters: [VPNServerFilter] = [
+            .kind(kind),
+            .isNotUnderMaintenance,
+            .features(secureCore ? .secureCore : .standard),
+            .matches(search),
+            ProtocolFilters().supportedProtocolsFilter,
+        ]
+        if freeOnly {
+            filters.append(.tier(.max(tier: .freeTier)))
+        }
+
         let groups = repository
             .getGroups(
-                filteredBy: [
-                    .kind(kind),
-                    .isNotUnderMaintenance,
-                    .features(secureCore ? .secureCore : .standard),
-                    .matches(search),
-                    ProtocolFilters().supportedProtocolsFilter,
-                ],
+                filteredBy: filters,
                 groupedBy: .serverType
             )
         let states = groups.map {

@@ -33,7 +33,6 @@ struct ConnectOnClickButton: View {
         Button(action: action, label: label)
             .onHover { isHovering = $0 }
             .buttonStyle(.ghost)
-            .padding(.trailing, .themeSpacing48) // a lot of padding to leave space for the three vertical dots
     }
 
     @SharedReader(.userTier) var userTier
@@ -59,7 +58,7 @@ struct ConnectOnClickButton: View {
                 }
             }
             Spacer(minLength: 0)
-            if isHovering, userTier?.isFreeTier == true {
+            if isHovering, isUsersTierTooLow {
                 Theme.Asset.vpnSubscriptionBadge.swiftUIImage.resizable()
                     .scaledToFit()
                     .frame(height: .themeSpacing20)
@@ -80,12 +79,16 @@ struct ConnectOnClickButton: View {
         .help(help)
     }
 
+    var isUsersTierTooLow: Bool {
+        (userTier ?? .freeTier) < groupInfo.minTier
+    }
+
     var isDisabled: Bool {
-        groupInfo.isUnderMaintenance || userTier?.isFreeTier == true
+        groupInfo.isUnderMaintenance || isUsersTierTooLow
     }
 
     var help: String {
-        guard userTier?.isFreeTier != true else {
+        guard !isUsersTierTooLow else {
             return Localizable.upgradeToPlus
         }
 
