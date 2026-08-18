@@ -64,8 +64,7 @@ final class LoginViewModel: ObservableObject {
     typealias Factory =
         AppSessionManagerFactory &
         CoreAlertServiceFactory & NavigationServiceFactory &
-        ProtonReachabilityCheckerFactory &
-        UpdateManagerFactory
+        ProtonReachabilityCheckerFactory
 
     private let factory: Factory
 
@@ -75,7 +74,6 @@ final class LoginViewModel: ObservableObject {
     private lazy var appSessionManager: AppSessionManager = factory.makeAppSessionManager()
     private lazy var navService: NavigationService = factory.makeNavigationService()
     private lazy var alertService: CoreAlertService = factory.makeCoreAlertService()
-    private lazy var updateManager: UpdateManager = factory.makeUpdateManager()
     private lazy var protonReachabilityChecker: ProtonReachabilityChecker = factory.makeProtonReachabilityChecker()
     private lazy var loginService: Login = LoginService(
         api: apiService,
@@ -114,7 +112,6 @@ final class LoginViewModel: ObservableObject {
         do {
             try await appSessionManager.attemptSilentLogIn()
             NSApp.setActivationPolicy(.accessory)
-            checkForUpdatesInBackground()
             // Don't switch to smart protocol or show sysex tour if we are launching minimised
             checkSysexApprovalAndAdjustProtocol(shouldDefaultToSmartIfPossible: false, shouldStartTour: false)
         } catch {
@@ -133,7 +130,6 @@ final class LoginViewModel: ObservableObject {
 
         do {
             try await appSessionManager.attemptSilentLogIn()
-            checkForUpdatesInBackground()
             // Don't switch to smart protocol or show sysex tour if we are logging in automatically
             checkSysexApprovalAndAdjustProtocol(shouldDefaultToSmartIfPossible: false, shouldStartTour: false)
         } catch let error as CommonVpnError where error == .userCredentialsMissing {
@@ -233,7 +229,6 @@ final class LoginViewModel: ObservableObject {
                 ObservabilityEnv.report(.ssoIdentityProviderLoginResult(status: .successful))
                 appSessionManager.finishLogin(authCredentials: AuthCredentials(data.getCredential), success: {
                     // Strongly capture `self` in this closure to delay de-allocation until sysex tour is shown
-                    self.checkForUpdatesInBackground()
                     // On manual login, show sysex tour if needed and/or switch to smart protocol if possible
                     self.checkSysexApprovalAndAdjustProtocol(shouldDefaultToSmartIfPossible: true, shouldStartTour: true)
                 }, failure: { [weak self] error in
@@ -349,10 +344,6 @@ final class LoginViewModel: ObservableObject {
             (error as NSError).code == ApiErrorCode.appVersionBad {
             logInFailureWithSupport?(error.localizedDescription)
         }
-    }
-
-    private func checkForUpdatesInBackground() {
-        updateManager.checkForUpdates(appSessionManager, userInitiated: false)
     }
 
     func keychainHelpAction() {

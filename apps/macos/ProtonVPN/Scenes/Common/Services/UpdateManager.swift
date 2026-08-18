@@ -104,6 +104,7 @@ final class UpdateManager: NSObject {
         suDateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss ZZ"
 
         self.updater = SPUStandardUpdaterController(updaterDelegate: self, userDriverDelegate: nil)
+        self.updater?.updater.automaticallyChecksForUpdates = false
     }
 
     @objc
@@ -120,6 +121,10 @@ final class UpdateManager: NSObject {
     }
 
     func checkForUpdates(_ appSessionManager: AppSessionManager?, userInitiated: Bool) {
+        guard userInitiated else {
+            return
+        }
+
         self.appSessionManager = appSessionManager
 
         propertiesManager.rememberLoginAfterUpdate = false
@@ -130,11 +135,6 @@ final class UpdateManager: NSObject {
                 window.level = .floating
                 continue
             }
-        }
-
-        guard userInitiated else {
-            updater?.updater.checkForUpdatesInBackground()
-            return
         }
 
         updater?.checkForUpdates(self)

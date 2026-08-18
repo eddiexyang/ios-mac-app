@@ -215,13 +215,9 @@ extension StatusIcon {
 }
 
 extension AppIcon {
-    #if DEBUG // use Debug icon for staging builds
-        static let appIconConnected = Theme.Asset.dynamicAppIconDebugConnected.image
-        static let appIconDisconnected = Theme.Asset.dynamicAppIconDebugDisconnected.image
-    #else
-        static let appIconConnected = Theme.Asset.dynamicAppIconConnected.image
-        static let appIconDisconnected = Theme.Asset.dynamicAppIconDisconnected.image
-    #endif
+    static let appIconConnected = Theme.Asset.dynamicAppIconConnected.image
+    static let appIconDisconnected = Theme.Asset.dynamicAppIconDisconnected.image
+
     var image: NSImage {
         switch self {
         case .active:

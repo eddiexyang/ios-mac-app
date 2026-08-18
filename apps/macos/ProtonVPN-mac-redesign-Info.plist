@@ -65,7 +65,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2024 Proton Technologies AG. All rights reserved.</string>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
+	<false/>
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 	<key>SUFeedURL</key>
