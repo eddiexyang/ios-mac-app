@@ -3,7 +3,7 @@ name: macOS SOCKS5 build
 on:
   push:
     branches:
-      - codex/socks5-transport
+      - main
   workflow_dispatch:
 
 permissions:
