@@ -27,39 +27,6 @@
     @Suite("Countries List Feature Tests mac")
     @MainActor
     struct CountriesListFeatureTests {
-        @Test("upsell banner tap presents all countries upsell")
-        func upsellBannerTapPresentsAllCountriesUpsell() async {
-            let store = TestStore(initialState: CountriesListFeature.State()) {
-                CountriesListFeature()
-            } withDependencies: {
-                $0.serverRepository = .notEmpty()
-            }
-
-            await store.send(.upsellBannerTapped) {
-                $0.destination = .allCountriesUpsell(
-                    .init(modalType: .allCountries(numberOfServers: 1, numberOfCountries: 1))
-                )
-            }
-        }
-
-        @Test("free connections upgrade tap presents all countries upsell")
-        func freeConnectionsUpgradeTapPresentsAllCountriesUpsell() async {
-            var state = CountriesListFeature.State()
-            state.destination = .freeConnectionsInfo(.init(countries: []))
-
-            let store = TestStore(initialState: state) {
-                CountriesListFeature()
-            } withDependencies: {
-                $0.serverRepository = .notEmpty()
-            }
-
-            await store.send(.destination(.presented(.freeConnectionsInfo(.upgradeTapped)))) {
-                $0.destination = .allCountriesUpsell(
-                    .init(modalType: .allCountries(numberOfServers: 1, numberOfCountries: 1))
-                )
-            }
-        }
-
         @Test("dismiss clears all countries upsell destination")
         func dismissClearsAllCountriesUpsellDestination() async {
             var state = CountriesListFeature.State()

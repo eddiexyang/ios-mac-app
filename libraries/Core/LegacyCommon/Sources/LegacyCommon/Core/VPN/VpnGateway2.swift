@@ -135,10 +135,9 @@ public class VpnGateway2: VpnGatewayProtocol2 {
         @Dependency(\.getCurrentUserTier) var getCurrentUserTier
         let currentUserTier = (try? getCurrentUserTier()) ?? .freeTier
 
-        if currentUserTier.isFreeTier, intent.location != .any(.fastest) {
-            throw GatewayError.resolutionUnavailable(forSpecificCountry: false, type: .unspecified, reason: .upgrade(.freeTier))
-        }
-
+        // The legacy server selector applies the user's tier before connecting, so let free users
+        // choose locations that resolve to a server available on their tier. Paid-only locations
+        // still surface an upgrade via the selector's unavailability resolution.
         let type = intent.serverType
 
         // TODO: when old code is deleted, refactor server selector to throw directly

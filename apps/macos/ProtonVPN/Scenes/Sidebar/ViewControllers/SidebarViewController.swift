@@ -35,7 +35,6 @@ import VPNShared
 final class SidebarViewController: NSViewController, NSWindowDelegate {
     private let allThings = NSView(frame: .zero)
     private let headerControllerViewContainer = NSView(frame: .zero)
-    private let tabBarControllerViewContainer = NSView(frame: .zero)
     private let activeControllerViewContainer = NSView(frame: .zero)
     private let announcementsControllerViewContainer = NSView(frame: .zero)
     private let connectionOverlay = ConnectionOverlay(frame: .zero)
@@ -60,8 +59,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
         & CoreAlertServiceFactory
         & HeaderViewModelFactory
         & MapSectionViewModelFactory
-        & ProfileManagerFactory
-        & SystemExtensionManagerFactory
         & VpnManagerFactory
 
     private let appStateManager: AppStateManager
@@ -70,8 +67,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     private let factory: Factory
     private let store: StoreOf<SidebarFeature>
 
-    private lazy var tabBarViewController: SidebarTabBarViewController = .init()
-
     private lazy var countriesSectionViewController: CountriesSectionViewController = { [unowned self] in
         CountriesSectionViewController(
             store: store.scope(
@@ -79,17 +74,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
                 action: \.countriesSection
             )
         )
-    }()
-
-    private lazy var profileSectionViewController: ProfileSectionViewController = { [unowned self] in
-        let viewModel = ProfilesSectionViewModel(
-            vpnGateway: vpnGateway,
-            navService: navService,
-            alertService: factory.makeCoreAlertService(),
-            profileManager: factory.makeProfileManager(),
-            sysexManager: factory.makeSystemExtensionManager()
-        )
-        return ProfileSectionViewController(viewModel: viewModel)
     }()
 
     private lazy var mapHeaderViewModel: MapHeaderViewModel = { [unowned self] in
@@ -179,7 +163,7 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
 
         setupMainView()
         setupHeader()
-        setupTabBar()
+        setupActiveController()
         setupMapSection()
 
         store.send(.viewDidLoad)
@@ -315,7 +299,7 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
             allThings.addSubview(item)
         }
 
-        for item in [activeControllerViewContainer, tabBarControllerViewContainer, headerControllerViewContainer, announcementsControllerViewContainer] {
+        for item in [activeControllerViewContainer, headerControllerViewContainer, announcementsControllerViewContainer] {
             item.translatesAutoresizingMaskIntoConstraints = false
             sidebarContainerView.addSubview(item)
         }
@@ -365,12 +349,7 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
             headerControllerViewContainer.trailingAnchor.constraint(equalTo: sidebarContainerView.trailingAnchor),
             headerPreferredHeight,
 
-            tabBarControllerViewContainer.topAnchor.constraint(equalTo: headerControllerViewContainer.bottomAnchor),
-            tabBarControllerViewContainer.leadingAnchor.constraint(equalTo: sidebarContainerView.leadingAnchor),
-            tabBarControllerViewContainer.trailingAnchor.constraint(equalTo: sidebarContainerView.trailingAnchor),
-            tabBarControllerViewContainer.heightAnchor.constraint(equalToConstant: Dimensions.tabBarHeight),
-
-            activeControllerViewContainer.topAnchor.constraint(equalTo: tabBarControllerViewContainer.bottomAnchor),
+            activeControllerViewContainer.topAnchor.constraint(equalTo: headerControllerViewContainer.bottomAnchor),
             activeControllerViewContainer.leadingAnchor.constraint(equalTo: sidebarContainerView.leadingAnchor),
             activeControllerViewContainer.trailingAnchor.constraint(equalTo: sidebarContainerView.trailingAnchor),
             activeControllerViewContainer.bottomAnchor.constraint(equalTo: sidebarContainerView.bottomAnchor),
@@ -402,34 +381,13 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
         applyExpandButtonLayoutDirection()
     }
 
-    private func setupTabBar() {
-        tabBarControllerViewContainer.pin(viewController: tabBarViewController)
-        tabBarViewController.onTabChanged = { [weak self] tab in
-            self?.store.send(.tabChanged(tab))
-        }
+    private func setupActiveController() {
+        activeController = countriesSectionViewController
+        activeControllerViewContainer.pin(viewController: activeController)
     }
 
     private func setupMapSection() {
         mapSectionViewContainer.pin(viewController: mapSectionViewController)
-    }
-
-    private func setViewController(forTab tab: SidebarTab) {
-        let newViewController: NSViewController = switch tab {
-        case .countries:
-            countriesSectionViewController
-        case .profiles:
-            profileSectionViewController
-        }
-        if activeController === newViewController {
-            return
-        }
-        if let activeController {
-            activeControllerViewContainer.willRemoveSubview(activeController.view)
-            activeController.view.removeFromSuperview()
-            activeController.removeFromParent()
-        }
-        activeController = newViewController
-        activeControllerViewContainer.pin(viewController: activeController)
     }
 
     @objc
@@ -494,11 +452,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     }
 
     private func applySidebarState() {
-        let selectedTab = store.selectedTab
-        if tabBarViewController.activeTab != selectedTab {
-            tabBarViewController.activeTab = selectedTab
-        }
-        setViewController(forTab: selectedTab)
         applyExpandState(store.expandState)
     }
 
@@ -524,7 +477,6 @@ extension SidebarViewController {
         static let expandButtonWidth: CGFloat = 28
         static let expandButtonHeight: CGFloat = 26
         static let expandButtonTopOffset: CGFloat = 20
-        static let tabBarHeight: CGFloat = 50
         static let initialViewHeight: CGFloat = 600
         static let defaultMapContainerWidth: CGFloat = 600
         static let announcementsWidth: CGFloat = 300

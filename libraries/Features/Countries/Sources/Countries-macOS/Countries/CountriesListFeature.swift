@@ -16,15 +16,10 @@
 //  You should have received a copy of the GNU General Public License
 //  along with Proton VPN.  If not, see <https://www.gnu.org/licenses/>.
 
-import Announcement
 import ComposableArchitecture
-import ConnectionInventory
 import CountriesShared
 import Domain
-import Localization
-import Payments
 import PaymentsShared
-import Persistence
 import Strings
 import SwiftUI
 import VPNAppCore
@@ -34,7 +29,6 @@ public struct CountriesListFeature: Sendable {
     @Reducer
     public enum Destination: Sendable {
         case featuresInfo(ServersFeaturesInformationFeature)
-        case freeConnectionsInfo(FreeConnectionsFeature)
         case allCountriesUpsell(UpsellSheetFeature)
     }
 
@@ -63,15 +57,8 @@ public struct CountriesListFeature: Sendable {
 
         var listState: ListState = .loading
 
-        var offerBannerViewModel: OfferBannerViewModel?
-
         @SharedReader(.secureCoreToggle) var secureCore: Bool
         @Presents public var destination: Destination.State?
-
-        var serverChangeAvailability: ServerChangeAuthorizer.ServerChangeAvailability {
-            @Dependency(\.serverChangeAuthorizer) var authorizer
-            return authorizer.serverChangeAvailability()
-        }
 
         enum ListState: Equatable {
             case loading
@@ -99,11 +86,7 @@ public struct CountriesListFeature: Sendable {
         case gateways(IdentifiedActionOf<DesktopCityStateListFeature>)
         case infoButtonTappedCountries
         case infoButtonTappedGateways
-        case infoButtonTappedFreeConnections
-        case upsellBannerTapped
-        case connectToFastest
         case listenForSecureCoreUpdates
-        case loadOfferBanner
         case destination(PresentationAction<Destination.Action>)
     }
 
@@ -111,8 +94,6 @@ public struct CountriesListFeature: Sendable {
 
     @Dependency(\.mainQueue) var mainQueue
     @Dependency(\.serverRepository) var repository
-    @Dependency(\.connectToVPN) var connectToVPN
-    @Dependency(\.announcementManager) var announcementManager
     @Dependency(\.sessionService) var sessionService
     @Dependency(\.linkOpener) var linkOpener
 
@@ -125,19 +106,6 @@ public struct CountriesListFeature: Sendable {
         BindingReducer()
         Reduce { state, action in
             switch action {
-            case .connectToFastest:
-                let spec = CityStateConnectionSpecFactory.makeSpec(location: .any(.fastest))
-                return .run { _ in
-                    try await connectToVPN(spec, nil, .quick)
-                }
-            case .upsellBannerTapped:
-                state.destination = .allCountriesUpsell(.init(
-                    modalType: .allCountries(
-                        numberOfServers: repository.roundedServerCount,
-                        numberOfCountries: repository.countryCount()
-                    )
-                ))
-                return .none
             case .infoButtonTappedCountries:
                 var infoState = ServersFeaturesInformationFeature.State.servicesInfo
                 infoState.screenTitle = Localizable.featuresTitle
@@ -147,17 +115,6 @@ public struct CountriesListFeature: Sendable {
                 var infoState = ServersFeaturesInformationFeature.State.gatewaysInfo
                 infoState.screenTitle = Localizable.locationsGateways
                 state.destination = .featuresInfo(infoState)
-                return .none
-            case .infoButtonTappedFreeConnections:
-                state.destination = .freeConnectionsInfo(.init(countries: freeCountries()))
-                return .none
-            case .destination(.presented(.freeConnectionsInfo(.upgradeTapped))):
-                state.destination = .allCountriesUpsell(.init(
-                    modalType: .allCountries(
-                        numberOfServers: repository.roundedServerCount,
-                        numberOfCountries: repository.countryCount()
-                    )
-                ))
                 return .none
             case .destination(.presented(.allCountriesUpsell(.upgradeTapped))):
                 state.destination = nil
@@ -186,16 +143,9 @@ public struct CountriesListFeature: Sendable {
                         .map(Action.getGroups)
                 }
                 .cancellable(id: CancelID.watchSecureCoreToggle)
-            case .loadOfferBanner:
-                state.offerBannerViewModel = announcementManager.offerBannerViewModel { announcement in
-                    announcementManager.markAsRead(notificationID: announcement.notificationID)
-                }
-                return .none
             case let .getGroups(secureCore):
                 state.listState = .loading
                 return .run { [search = state.searchText, expandedCode = state.expandedCountryCode, freeOnly = state.isFreeTier] send in
-                    await send(.loadOfferBanner)
-
                     let countries = groups(
                         with: .country,
                         search: search,
@@ -302,34 +252,6 @@ public struct CountriesListFeature: Sendable {
         }
         return .init(uniqueElements: states)
     }
-
-    private func freeCountries() -> IdentifiedArrayOf<FreeConnectionsFeature.State.Country> {
-        let serverGroups = repository.getGroups(filteredBy: [.tier(.exact(tier: 0))], groupedBy: .serverType)
-        var seenCountryCodes = Set<String>()
-
-        let countries = serverGroups.compactMap { serverGroup -> FreeConnectionsFeature.State.Country? in
-            let countryCode: String? = switch serverGroup.kind {
-            case let .country(code), let .city(_, code), let .state(_, code):
-                code
-            case .gateway:
-                nil
-            }
-
-            guard let countryCode,
-                  serverGroup.minTier.isFreeTier,
-                  !seenCountryCodes.contains(countryCode) else {
-                return nil
-            }
-
-            seenCountryCodes.insert(countryCode)
-            return .init(
-                code: countryCode,
-                name: LocalizationUtility.default.countryName(forCode: countryCode) ?? Localizable.unavailable
-            )
-        }
-
-        return IdentifiedArray(uniqueElements: countries)
-    }
 }
 
 extension CountriesListFeature.Destination.State: Equatable {}
@@ -340,7 +262,6 @@ public extension CountriesListFeature.State {
             lhs.searchText == rhs.searchText &&
             lhs.expandedCountryCode == rhs.expandedCountryCode &&
             lhs.listState == rhs.listState &&
-            lhs.offerBannerViewModel == rhs.offerBannerViewModel &&
             lhs.secureCore == rhs.secureCore &&
             lhs.destination == rhs.destination
     }

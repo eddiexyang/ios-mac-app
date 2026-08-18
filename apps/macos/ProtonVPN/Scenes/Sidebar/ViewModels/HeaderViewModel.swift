@@ -74,7 +74,10 @@ final class HeaderViewModel {
     var changeServerStateUpdated: ((ServerChangeViewState) -> Void)?
 
     var shouldShowChangeServer: Bool {
-        isConnected && credentials.tier.isFreeTier
+        // The "Change Server" control has been removed from the sidebar header. Free users
+        // change servers via the Countries list or Quick Connect. (The menu-bar status item
+        // still exposes change-server independently.)
+        false
     }
 
     private var serverChangeTimer: Timer?

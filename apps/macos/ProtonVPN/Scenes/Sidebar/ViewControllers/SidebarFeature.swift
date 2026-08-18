@@ -30,7 +30,6 @@ struct SidebarFeature {
             case expanded
         }
 
-        var selectedTab: SidebarTab = .countries
         var isLoadingOverlayVisible = false
         var isOverlayWindowPresented = false
         var expandState: ExpandState = .expanded
@@ -59,7 +58,6 @@ struct SidebarFeature {
         case occlusionStateChanged(isVisible: Bool)
         case appStateChanged(AppState)
 
-        case tabChanged(SidebarTab)
         case expandButtonTapped
 
         case countriesSection(CountriesSectionFeature.Action)
@@ -96,7 +94,6 @@ struct SidebarFeature {
         Reduce { state, action in
             switch action {
             case .viewDidLoad:
-                state.selectedTab = .countries
                 let loadedMapWidth = defaultsProvider.getDefaults().integer(forKey: AppConstants.UserDefaults.mapWidth)
                 state.mapWidth = loadedMapWidth > Int(environment.expandButtonWidth) ? CGFloat(loadedMapWidth) : environment.defaultMapWidth
                 return .send(.startObservingEvents)
@@ -210,16 +207,8 @@ struct SidebarFeature {
                 state.isLoadingOverlayVisible = false
                 return .cancel(id: CancelID.overlayDelay)
 
-            case let .tabChanged(tab):
-                state.selectedTab = tab
-                return .none
-
             case .expandButtonTapped:
                 state.expandState = state.expandState == .compact ? .expanded : .compact
-                return .none
-
-            case .countriesSection(.delegate(.openProfilesTab)):
-                state.selectedTab = .profiles
                 return .none
 
             case .countriesSection:

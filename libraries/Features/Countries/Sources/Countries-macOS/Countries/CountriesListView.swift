@@ -16,17 +16,11 @@
 //  You should have received a copy of the GNU General Public License
 //  along with Proton VPN.  If not, see <https://www.gnu.org/licenses/>.
 
-import Announcement
 import ComposableArchitecture
-import ConnectionInventory
 import CountriesShared
 import Dependencies
 import Domain
-import LegacyCommon
-import Modals
 import Payments
-import SharedViews
-import Sharing
 import Strings
 import SwiftUI
 import Theme
@@ -66,9 +60,6 @@ public struct CountriesListView: View {
                 if !store.gateways.isEmpty {
                     gatewaysSection
                 }
-                if store.isFreeTier {
-                    fastestConnectionSection
-                }
                 countriesSection
             }
         }
@@ -78,17 +69,6 @@ public struct CountriesListView: View {
 
     private var countriesSection: some View {
         Section {
-            if store.isFreeTier {
-                if let offer = store.offerBannerViewModel {
-                    OfferBannerView(viewModel: offer, onDismiss: {
-                        store.send(.loadOfferBanner)
-                    })
-                    .padding(.horizontal, .themeSpacing12)
-                } else {
-                    upsellBanner
-                        .padding(.horizontal, .themeSpacing12)
-                }
-            }
             ForEach(store.scope(state: \.countries, action: \.countries)) { store in
                 CityStateListView(store: store)
                     .id(store.id)
@@ -101,25 +81,6 @@ public struct CountriesListView: View {
         }
     }
 
-    private var upsellBanner: some View {
-        switch store.serverChangeAvailability {
-        case .available:
-            UpsellBannerView(viewModel: .init(
-                leftIcon: Modals.Asset.worldwideCoverage,
-                text: Localizable.freeBannerText
-            ) {
-                store.send(.upsellBannerTapped)
-            })
-        case .unavailable:
-            UpsellBannerView(viewModel: .init(
-                leftIcon: Modals.Asset.wrongCountry,
-                text: Localizable.wrongCountryBannerText
-            ) {
-                store.send(.upsellBannerTapped)
-            })
-        }
-    }
-
     private var gatewaysSection: some View {
         Section {
             ForEach(store.scope(state: \.gateways, action: \.gateways)) { store in
@@ -128,26 +89,6 @@ public struct CountriesListView: View {
             }
         } header: {
             sectionHeader(title: Localizable.locationsGateways, action: .infoButtonTappedGateways)
-        }
-    }
-
-    private var fastestConnectionSection: some View {
-        Section {
-            Button {
-                store.send(.connectToFastest)
-            } label: {
-                HStack(spacing: .themeSpacing8) {
-                    Theme.Asset.Icons.bolt.swiftUIImage.resizable().frame(.square(.themeSpacing20))
-                    Text(Localizable.fastest)
-                        .themeFont(.title3(emphasised: false))
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, .themeSpacing12)
-                .padding(.horizontal, .themeSpacing16)
-            }
-            .buttonStyle(.ghost)
-        } header: {
-            sectionHeader(title: Localizable.connectionsFreeWithCount(1), action: .infoButtonTappedFreeConnections)
         }
     }
 
@@ -183,10 +124,6 @@ private struct CountriesListSheetsModifier: ViewModifier {
                         width: Dimensions.ServersFeaturesInformation.width,
                         height: featuresInfoHeight(for: store)
                     )
-            }
-            .sheet(item: $store.scope(state: \.destination?.freeConnectionsInfo, action: \.destination.freeConnectionsInfo)) { store in
-                FreeConnectionsView(store: store)
-                    .frame(width: Dimensions.FreeConnections.width, height: Dimensions.FreeConnections.height)
             }
             .sheet(item: $store.scope(state: \.destination?.allCountriesUpsell, action: \.destination.allCountriesUpsell)) { store in
                 UpsellViewController(
@@ -224,11 +161,6 @@ private struct CountriesListSheetsModifier: ViewModifier {
             static let topHeaderHeight: CGFloat = 44
             static let sectionHeaderHeight: CGFloat = 52
             static let estimatedFeatureRowHeight: CGFloat = 108
-        }
-
-        enum FreeConnections {
-            static let width: CGFloat = 520
-            static let height: CGFloat = 500
         }
 
         enum Upsell {

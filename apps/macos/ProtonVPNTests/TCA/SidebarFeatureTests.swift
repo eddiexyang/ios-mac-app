@@ -27,15 +27,6 @@ import Testing
 @MainActor
 @Suite
 struct SidebarFeatureTests {
-    @Test("tab changed")
-    func tabChanged() async {
-        let store = makeStore()
-
-        await store.send(.tabChanged(.profiles)) {
-            $0.selectedTab = .profiles
-        }
-    }
-
     @Test("window end live resize persists map width")
     func windowEndLiveResizePersistsMapWidth() async {
         let defaults = UserDefaults(suiteName: "SidebarFeatureTests-\(UUID().uuidString)")!
@@ -130,15 +121,6 @@ struct SidebarFeatureTests {
         }
         await store.send(.expandButtonTapped) {
             $0.expandState = .expanded
-        }
-    }
-
-    @Test("countries delegate routes to sidebar")
-    func countriesDelegateRoutesToSidebar() async {
-        let store = makeStore()
-
-        await store.send(.countriesSection(.delegate(.openProfilesTab))) {
-            $0.selectedTab = .profiles
         }
     }
 
