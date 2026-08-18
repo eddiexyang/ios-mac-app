@@ -390,13 +390,22 @@ final class StatusMenuViewModel {
         @Dependency(\.serverRepository) var repository
         // Filter out gateways, because we don't have "Connect to fastest server" for gateways
         let isCountry = VPNServerFilter.kind(.country)
+        let tierFilter: VPNServerFilter? = credentials.tier.isFreeTier
+            ? .tier(.max(tier: .freeTier))
+            : nil
+        var standardFilters: [VPNServerFilter] = [.features(.standard), isCountry]
+        var secureCoreFilters: [VPNServerFilter] = [.features(.secureCore), isCountry]
+        if let tierFilter {
+            standardFilters.append(tierFilter)
+            secureCoreFilters.append(tierFilter)
+        }
 
         standardCountries = repository.getGroups(
-            filteredBy: [.features(.standard), isCountry], groupedBy: .serverType,
+            filteredBy: standardFilters, groupedBy: .serverType,
             orderedBy: .exitCountryCodeAscending
         )
         secureCoreCountries = repository.getGroups(
-            filteredBy: [.features(.secureCore), isCountry], groupedBy: .serverType,
+            filteredBy: secureCoreFilters, groupedBy: .serverType,
             orderedBy: .exitCountryCodeAscending
         )
 
