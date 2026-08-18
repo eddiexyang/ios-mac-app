@@ -16,10 +16,15 @@
 //  You should have received a copy of the GNU General Public License
 //  along with Proton VPN.  If not, see <https://www.gnu.org/licenses/>.
 
+import Announcement
 import ComposableArchitecture
+import ConnectionInventory
 import CountriesShared
 import Domain
+import Localization
+import Payments
 import PaymentsShared
+import Persistence
 import Strings
 import SwiftUI
 import VPNAppCore
