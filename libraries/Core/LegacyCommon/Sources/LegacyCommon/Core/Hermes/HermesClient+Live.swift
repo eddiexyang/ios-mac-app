@@ -22,6 +22,37 @@ import Hermes
 import ProtonCoreFeatureFlags
 import Sharing
 
+#if os(macOS)
+    private extension SharedKey where Self == InMemoryKey<Bool>.Default {
+        static var macOSHermesEnabled: Self {
+            self[.inMemory("macOSHermesEnabled"), default: false]
+        }
+    }
+
+    private extension SharedKey where Self == InMemoryKey<[HermesResolver]>.Default {
+        static var macOSHermesResolvers: Self {
+            self[.inMemory("macOSHermesResolvers"), default: []]
+        }
+    }
+
+    extension HermesClient: @retroactive DependencyKey {
+        // Hermes is not part of the macOS SOCKS5 app. Shared consumers receive a
+        // permanently disabled, no-op implementation that never touches disk.
+        public static let liveValue: HermesClient = .init {
+            SharedReader(wrappedValue: false, .macOSHermesEnabled)
+        } setIsEnabled: { _ in
+        } activeHermesResolvers: {
+            SharedReader(wrappedValue: [], .macOSHermesResolvers)
+        } validateHermesLocation: { _ in
+            false
+        } addHermesResolver: { _ in
+            false
+        } removeHermesResolver: { _ in
+            false
+        } applyDiff: { _ in
+        }
+    }
+#else
 private extension SharedKey where Self == FileStorageKey<[HermesResolver]>.Default {
     static var hermesResolvers: Self {
         self[.fileStorage(.documentsDirectory.appending(component: HermesResolver.storagePathComponent)), default: []]
@@ -80,3 +111,4 @@ private extension HermesFeature {
         }
     }
 }
+#endif

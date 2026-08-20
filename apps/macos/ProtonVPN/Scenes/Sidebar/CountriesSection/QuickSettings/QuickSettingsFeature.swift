@@ -316,7 +316,6 @@ struct QuickSettingsFeature {
         enum Alert: Equatable {
             case confirmKillSwitchOn
             case cancelKillSwitchOn
-            case confirmDisableHermesAndSetNetShield(NetShieldType)
         }
     }
 
@@ -334,8 +333,6 @@ struct QuickSettingsFeature {
     @Dependency(\.portForwardingPropertyProvider) var portForwardingPropertyProvider
     @Dependency(\.natPortMappingService) var natPortMappingService
     @Dependency(\.vpnConnectionStatusPublisher) var vpnConnectionStatusPublisher
-    @Dependency(\.hermesClient) var hermesClient
-
     private let environment: Environment
 
     init(environment: Environment) {
@@ -451,10 +448,6 @@ struct QuickSettingsFeature {
                     state.alert = Self.killSwitchConflictAlert
                     return .none
                 }
-                if case let .netShield(level) = option, level != .off, hermesClient.isEnabled().wrappedValue {
-                    state.alert = Self.hermesConflictAlert(level: level)
-                    return .none
-                }
                 if Self.optionRequiresUpsell(type: type, option: option),
                    let modalType = Self.upsellModalType(for: type) {
                     state.destination = .upsell(.init(modalType: modalType))
@@ -520,17 +513,6 @@ struct QuickSettingsFeature {
                 return .run { @MainActor send in
                     await withCheckedContinuation { continuation in
                         environment.performOptionSelection(.killSwitchDisplay, .killSwitchOn) {
-                            continuation.resume()
-                        }
-                    }
-                    send(.dismissDetails)
-                }
-
-            case let .alert(.presented(.confirmDisableHermesAndSetNetShield(level))):
-                hermesClient.setIsEnabled(false)
-                return .run { @MainActor send in
-                    await withCheckedContinuation { continuation in
-                        environment.performOptionSelection(.netShieldDisplay, .netShield(level)) {
                             continuation.resume()
                         }
                     }
@@ -619,22 +601,6 @@ struct QuickSettingsFeature {
         )
     }
 
-    static func hermesConflictAlert(level: NetShieldType) -> AlertState<Action.Alert> {
-        AlertState(
-            title: { TextState(Localizable.hermesConflictNetshieldOnTitle) },
-            actions: {
-                ButtonState(
-                    action: .send(.confirmDisableHermesAndSetNetShield(level)),
-                    label: { TextState(Localizable.continue) }
-                )
-                ButtonState(
-                    role: .cancel,
-                    label: { TextState(Localizable.notNow) }
-                )
-            },
-            message: { TextState(Localizable.hermesConflictNetshieldOnDescription) }
-        )
-    }
 }
 
 struct QuickSettingOptionRow: Identifiable {

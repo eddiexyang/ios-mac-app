@@ -17,7 +17,6 @@
 //  along with Proton VPN.  If not, see <https://www.gnu.org/licenses/>.
 
 #if os(macOS)
-    import Connection
     import Dependencies
     import Domain
     import Foundation
@@ -74,17 +73,9 @@
             let wgConfig = propertiesManager.wireguardConfig
             let gateway: String
 
-            @Dependency(\.hermesClient) var hermesClient
-            @Dependency(\.featureAuthorizerProvider) var featureAuthorizerProvider
-            let hermesIsEnabled: Bool = hermesClient.isEnabled().wrappedValue
-            let hermesIsAllowed = featureAuthorizerProvider.authorizer(for: HermesFeature.self)().isAllowed
-            if hermesIsEnabled, hermesIsAllowed {
-                gateway = "10.2.0.1"
-            } else {
-                // Extract DNS servers (which act as gateways)
-                let dnsServers = wgConfig.dnsServers ?? ["10.2.0.1"]
-                gateway = dnsServers.first ?? "10.2.0.1"
-            }
+            // Extract DNS servers (which act as gateways)
+            let dnsServers = wgConfig.dnsServers ?? ["10.2.0.1"]
+            gateway = dnsServers.first ?? "10.2.0.1"
 
             log.info("Using WireGuard DNS/gateway: \(gateway)", category: .connection)
             return gateway

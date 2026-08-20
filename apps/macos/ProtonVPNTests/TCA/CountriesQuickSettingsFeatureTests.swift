@@ -398,31 +398,6 @@ struct CountriesQuickSettingsFeatureTests {
         }
     }
 
-    @Test("netshield option presents hermes conflict alert")
-    func netShieldOptionPresentsHermesConflictAlert() async {
-        @Shared(.userTier) var userTier: Int? = .paidTier
-
-        let store = TestStore(initialState: QuickSettingsFeature.State()) {
-            QuickSettingsFeature(environment: .init(
-                performOptionSelection: { _, _, dismiss in dismiss() },
-                initialNetShieldStats: { .zero(enabled: false) }
-            ))
-        } withDependencies: {
-            $0.hermesClient.setIsEnabled(true)
-        }
-
-        await store.send(.buttonTapped(.netShieldDisplay)) {
-            $0.destination = .quickSettingDetail(Self.expectedDetail(type: .netShieldDisplay, from: $0))
-            $0.secureCore.isSelected = false
-            $0.netShield.isSelected = true
-            $0.killSwitch.isSelected = false
-            $0.portForwarding.isSelected = false
-        }
-        await store.send(.destination(.presented(.quickSettingDetail(.delegate(.option(.netShieldDisplay, .netShield(.level1))))))) {
-            $0.alert = QuickSettingsFeature.hermesConflictAlert(level: .level1)
-        }
-    }
-
     private func makeStore(
         performOptionSelection: @escaping @Sendable (QuickSettingType, QuickSettingOptionID, @escaping @Sendable () -> Void) -> Void = { _, _, dismiss in dismiss() }
     ) -> TestStoreOf<QuickSettingsFeature> {

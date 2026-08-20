@@ -39,9 +39,7 @@ final class AdvancedSettingsViewModel {
     private lazy var alertService: CoreAlertService = factory.makeCoreAlertService()
     @Dependency(\.propertiesManager) private var propertiesManager
 
-    @Dependency(\.appFeaturePropertyProvider) private var featurePropertyProvider
     @Dependency(\.featureAuthorizerProvider) private var featureAuthorizerProvider
-    @Dependency(\.hermesClient) private var hermesClient
     @Dependency(\.safeModePropertyProvider) private var safeModePropertyProvider
     @Dependency(\.natTypePropertyProvider) private var natTypePropertyProvider
 
@@ -53,8 +51,6 @@ final class AdvancedSettingsViewModel {
     }
 
     var reloadNeeded: (() -> Void)?
-
-    lazy var hermesViewModel = HermesViewModel(factory: factory)
 
     private var natTypeObserverTask: Task<Void, Never>?
     private var safeModeObserverTask: Task<Void, Never>?
@@ -142,18 +138,6 @@ final class AdvancedSettingsViewModel {
 
     var safeMode: Bool {
         safeModePropertyProvider.getSafeMode() ?? true
-    }
-
-    func displayState(for feature: (some ProvidableFeature & ToggleableFeature).Type) -> PaidFeatureDisplayState {
-        let authorizer: () -> FeatureAuthorizationResult = featureAuthorizerProvider.authorizer(for: feature)
-        switch authorizer() {
-        case .success:
-            return .available(enabled: featurePropertyProvider.getValue(for: feature) == .on, interactive: true)
-        case .failure(.featureDisabled):
-            return .disabled
-        case .failure(.requiresUpgrade):
-            return .upsell
-        }
     }
 
     // MARK: - Upsell Modals

@@ -17,12 +17,9 @@
 //  along with ProtonVPN.  If not, see <https://www.gnu.org/licenses/>.
 
 import Cocoa
-import ComposableArchitecture
 import Domain
 import Ergonomics
-import Hermes
 import LegacyCommon
-import ProtonCoreFeatureFlags
 import SharedViews
 import Strings
 import Theme
@@ -33,8 +30,6 @@ final class AdvancedSettingsViewController: NSViewController, ReloadableViewCont
     @IBOutlet private var safeModeView: SettingsTickboxView!
     @IBOutlet private var usageDataView: SettingsTickboxView!
     @IBOutlet private var crashReportsView: SettingsTickboxView!
-    @IBOutlet private var hermesView: SettingsTickboxView!
-
     private var viewModel: AdvancedSettingsViewModel
 
     @available(*, unavailable)
@@ -46,8 +41,6 @@ final class AdvancedSettingsViewController: NSViewController, ReloadableViewCont
         self.viewModel = viewModel
         super.init(nibName: NSNib.Name("AdvancedSettings"), bundle: nil)
     }
-
-    private var hermesChildWindowController: NSWindowController?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -124,38 +117,6 @@ final class AdvancedSettingsViewController: NSViewController, ReloadableViewCont
         safeModeView.setupItem(model: model, delegate: self)
     }
 
-    private func setupHermesItem() {
-        @Dependency(\.hermesClient) var hermesClient
-
-        let featureState: PaidFeatureDisplayState = viewModel.displayState(for: HermesFeature.self)
-
-        let model = SettingsTickboxView.ViewModel(
-            labelText: Localizable.hermesFeatureTitle,
-            state: featureState,
-            liveSource: hermesClient.isEnabled().publisher.eraseToAnyPublisher()
-        )
-        hermesView.setupItem(model: model, delegate: self)
-
-        if case .available = featureState {
-            hermesView.didTapHandler = { [weak self] in
-                self?.didTapHermesView(self)
-            }
-        }
-    }
-
-    @objc
-    private func didTapHermesView(_: Any?) {
-        if hermesChildWindowController != nil {
-            hermesChildWindowController?.window?.makeKeyAndOrderFront(self)
-        } else {
-            let controller = HermesWindowController(viewModel: viewModel.hermesViewModel)
-            controller.window?.centerWindow(in: view.window?.screen)
-            controller.showWindow(self)
-            controller.delegate = self
-            hermesChildWindowController = controller
-        }
-    }
-
     // MARK: - ReloadableViewController
 
     func reloadView() {
@@ -165,7 +126,6 @@ final class AdvancedSettingsViewController: NSViewController, ReloadableViewCont
         setupSafeModeItem()
         setupUsageDataTypeItem()
         setupCrashReportsTypeItem()
-        setupHermesItem()
     }
 }
 
@@ -189,8 +149,6 @@ extension AdvancedSettingsViewController: TickboxViewDelegate {
             viewModel.usageData = value == .on
         case crashReportsView:
             viewModel.crashReports = value == .on
-        case hermesView:
-            viewModel.hermesViewModel.setIsEnabled(value == .on)
         default:
             break
         }
@@ -202,24 +160,8 @@ extension AdvancedSettingsViewController: TickboxViewDelegate {
             viewModel.showNATUpsell()
         case safeModeView:
             viewModel.showSafeModeUpsell()
-        case hermesView:
-            viewModel.hermesViewModel.upsellButtonTapped()
         default:
             break
-        }
-    }
-}
-
-extension AdvancedSettingsViewController: WindowControllerDelegate {
-    func windowCloseRequested(_ sender: WindowController) {
-        guard sender is HermesWindowController else { return }
-        sender.close()
-    }
-
-    func windowWillClose(_ sender: WindowController) {
-        guard sender is HermesWindowController else { return }
-        viewModel.hermesViewModel.hermesWindowWillClose { [weak self] in
-            self?.hermesChildWindowController = nil
         }
     }
 }

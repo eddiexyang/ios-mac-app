@@ -141,9 +141,6 @@ extension MacAlertService: CoreAlertService {
             )
             show(alert: alert, upsellModalType: countryModal)
 
-        case let alert as HermesUpsellAlert:
-            show(alert: alert, upsellModalType: .hermes)
-
         case let alert as PlutoniumUpsellAlert:
             show(alert: alert, upsellModalType: .plutonium)
 
@@ -277,9 +274,6 @@ extension MacAlertService: CoreAlertService {
             showDefaultSystemAlert(alert)
 
         case let alert as DomainErrorAlert:
-            showDefaultSystemAlert(alert)
-
-        case let alert as HermesSettingsViewAlert:
             showDefaultSystemAlert(alert)
 
         case let alert as TwoFactorAuthenticationRequiredAlert:

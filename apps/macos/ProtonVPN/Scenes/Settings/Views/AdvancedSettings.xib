@@ -10,7 +10,6 @@
             <connections>
                 <outlet property="alternativeRoutingView" destination="AJA-PJ-rZL" id="DEJ-OE-jJv"/>
                 <outlet property="crashReportsView" destination="1FN-1x-mbN" id="fmL-ZY-esi"/>
-                <outlet property="hermesView" destination="qse-Mw-u5X" id="B2T-N0-Ncy"/>
                 <outlet property="natTypeView" destination="hVw-co-WZ4" id="JZr-XB-INi"/>
                 <outlet property="safeModeView" destination="Qcl-6z-lpZ" id="OlN-ko-UgW"/>
                 <outlet property="usageDataView" destination="go9-cO-pXj" id="knf-vr-L4k"/>
@@ -319,63 +318,6 @@
                                 <outlet property="switchButton" destination="J2u-gR-NFk" id="g16-YZ-oSh"/>
                             </connections>
                         </customView>
-                        <customView translatesAutoresizingMaskIntoConstraints="NO" id="qse-Mw-u5X" userLabel="Hermes View" customClass="SettingsTickboxView" customModule="ProtonVPN" customModuleProvider="target">
-                            <rect key="frame" x="0.0" y="30" width="500" height="50"/>
-                            <subviews>
-                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="DV7-vy-L6I" customClass="PVPNTextField" customModule="ProtonVPN" customModuleProvider="target">
-                                    <rect key="frame" x="40" y="17" width="52" height="16"/>
-                                    <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="Hermes" id="VcM-3h-3Be">
-                                        <font key="font" metaFont="system"/>
-                                        <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
-                                    </textFieldCell>
-                                </textField>
-                                <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="2Dz-ba-Rfl" customClass="HoverableButtonImageView" customModule="ProtonVPN" customModuleProvider="target">
-                                    <rect key="frame" x="421" y="13" width="39" height="24"/>
-                                    <constraints>
-                                        <constraint firstAttribute="height" constant="24" id="lVr-To-bsM"/>
-                                        <constraint firstAttribute="width" constant="38.75" id="z9w-xv-dQZ"/>
-                                    </constraints>
-                                    <imageCell key="cell" refusesFirstResponder="YES" alignment="left" animates="YES" imageScaling="proportionallyDown" id="wAg-eX-BiH"/>
-                                </imageView>
-                                <box boxType="custom" borderType="none" borderWidth="0.0" title="Box" titlePosition="noTitle" translatesAutoresizingMaskIntoConstraints="NO" id="so3-8N-gwF">
-                                    <rect key="frame" x="42" y="0.0" width="418" height="1"/>
-                                    <view key="contentView" id="zjb-SC-YEb">
-                                        <rect key="frame" x="0.0" y="0.0" width="418" height="1"/>
-                                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                                    </view>
-                                    <constraints>
-                                        <constraint firstAttribute="height" constant="1" id="4as-wL-7te"/>
-                                    </constraints>
-                                </box>
-                                <textField focusRingType="none" horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="7Ab-rI-VJ8">
-                                    <rect key="frame" x="423" y="17" width="37" height="16"/>
-                                    <textFieldCell key="cell" lineBreakMode="clipping" title="Label" id="cwJ-f6-fid">
-                                        <font key="font" metaFont="system"/>
-                                        <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
-                                        <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
-                                    </textFieldCell>
-                                </textField>
-                            </subviews>
-                            <constraints>
-                                <constraint firstItem="DV7-vy-L6I" firstAttribute="leading" secondItem="qse-Mw-u5X" secondAttribute="leading" constant="42" id="20n-9n-Tx7"/>
-                                <constraint firstItem="so3-8N-gwF" firstAttribute="leading" secondItem="DV7-vy-L6I" secondAttribute="leading" id="92h-Xn-4bV"/>
-                                <constraint firstAttribute="trailing" secondItem="7Ab-rI-VJ8" secondAttribute="trailing" constant="42" id="GeG-zD-ub3"/>
-                                <constraint firstItem="2Dz-ba-Rfl" firstAttribute="centerY" secondItem="qse-Mw-u5X" secondAttribute="centerY" id="IaB-xa-NTm"/>
-                                <constraint firstAttribute="height" constant="50" id="JPT-Ax-Fhm"/>
-                                <constraint firstAttribute="bottom" secondItem="so3-8N-gwF" secondAttribute="bottom" id="XHQ-gN-1hh"/>
-                                <constraint firstItem="7Ab-rI-VJ8" firstAttribute="centerY" secondItem="qse-Mw-u5X" secondAttribute="centerY" id="fyA-xM-5xd"/>
-                                <constraint firstItem="so3-8N-gwF" firstAttribute="trailing" secondItem="2Dz-ba-Rfl" secondAttribute="trailing" id="hfL-Ok-l11"/>
-                                <constraint firstItem="DV7-vy-L6I" firstAttribute="centerY" secondItem="qse-Mw-u5X" secondAttribute="centerY" id="iUd-mH-RiR"/>
-                                <constraint firstAttribute="trailing" secondItem="2Dz-ba-Rfl" secondAttribute="trailing" constant="40" id="pYM-gA-3eI"/>
-                            </constraints>
-                            <connections>
-                                <outlet property="label" destination="DV7-vy-L6I" id="FN8-xe-BYc"/>
-                                <outlet property="onOffLabel" destination="7Ab-rI-VJ8" id="bZh-zC-eCx"/>
-                                <outlet property="separator" destination="so3-8N-gwF" id="0xr-Za-cL8"/>
-                                <outlet property="upsellImageView" destination="2Dz-ba-Rfl" id="mjf-49-RHv"/>
-                            </connections>
-                        </customView>
                     </subviews>
                     <edgeInsets key="edgeInsets" left="0.0" right="0.0" top="10" bottom="30"/>
                     <constraints>
@@ -397,10 +339,8 @@
                         <integer value="1000"/>
                         <integer value="1000"/>
                         <integer value="1000"/>
-                        <integer value="1000"/>
                     </visibilityPriorities>
                     <customSpacing>
-                        <real value="3.4028234663852886e+38"/>
                         <real value="3.4028234663852886e+38"/>
                         <real value="3.4028234663852886e+38"/>
                         <real value="3.4028234663852886e+38"/>
