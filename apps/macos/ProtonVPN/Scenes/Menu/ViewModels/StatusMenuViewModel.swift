@@ -79,7 +79,7 @@ final class StatusMenuViewModel {
 
     var shouldShowProfileDropdown: Bool { profileAuthorizer.canUseProfiles }
     var shouldShowChangeServer: Bool {
-        isConnected && credentials.tier.isFreeTier
+        false
     }
 
     private var serverChangeTimer: Timer?

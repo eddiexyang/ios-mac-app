@@ -36,7 +36,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     private let allThings = NSView(frame: .zero)
     private let headerControllerViewContainer = NSView(frame: .zero)
     private let activeControllerViewContainer = NSView(frame: .zero)
-    private let announcementsControllerViewContainer = NSView(frame: .zero)
     private let connectionOverlay = ConnectionOverlay(frame: .zero)
     private let sidebarContainerView = NSView(frame: .zero)
     private let mapSectionViewContainer = NSView(frame: .zero)
@@ -299,7 +298,7 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
             allThings.addSubview(item)
         }
 
-        for item in [activeControllerViewContainer, headerControllerViewContainer, announcementsControllerViewContainer] {
+        for item in [activeControllerViewContainer, headerControllerViewContainer] {
             item.translatesAutoresizingMaskIntoConstraints = false
             sidebarContainerView.addSubview(item)
         }
@@ -308,11 +307,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
     }
 
     private func setupLayoutConstraints(in rootView: NSView) {
-        let announcementsPreferredWidth = announcementsControllerViewContainer.widthAnchor.constraint(equalToConstant: Dimensions.announcementsWidth)
-        announcementsPreferredWidth.priority = .defaultLow
-        let announcementsPreferredHeight = announcementsControllerViewContainer.heightAnchor.constraint(equalToConstant: Dimensions.announcementsHeight)
-        announcementsPreferredHeight.priority = .defaultLow
-
         let headerPreferredHeight = headerControllerViewContainer.heightAnchor.constraint(equalToConstant: Dimensions.headerPreferredHeight)
         headerPreferredHeight.priority = .defaultLow
 
@@ -353,13 +347,6 @@ final class SidebarViewController: NSViewController, NSWindowDelegate {
             activeControllerViewContainer.leadingAnchor.constraint(equalTo: sidebarContainerView.leadingAnchor),
             activeControllerViewContainer.trailingAnchor.constraint(equalTo: sidebarContainerView.trailingAnchor),
             activeControllerViewContainer.bottomAnchor.constraint(equalTo: sidebarContainerView.bottomAnchor),
-
-            announcementsControllerViewContainer.topAnchor.constraint(equalTo: sidebarContainerView.topAnchor, constant: Dimensions.announcementsTopOffset),
-            announcementsControllerViewContainer.trailingAnchor.constraint(equalTo: sidebarContainerView.trailingAnchor, constant: Dimensions.announcementsTrailingOffset),
-            announcementsPreferredWidth,
-            announcementsPreferredHeight,
-            announcementsControllerViewContainer.widthAnchor.constraint(lessThanOrEqualToConstant: Dimensions.announcementsWidth),
-            announcementsControllerViewContainer.heightAnchor.constraint(lessThanOrEqualToConstant: Dimensions.announcementsHeight),
         ])
     }
 
@@ -479,10 +466,6 @@ extension SidebarViewController {
         static let expandButtonTopOffset: CGFloat = 20
         static let initialViewHeight: CGFloat = 600
         static let defaultMapContainerWidth: CGFloat = 600
-        static let announcementsWidth: CGFloat = 300
-        static let announcementsHeight: CGFloat = 200
-        static let announcementsTopOffset: CGFloat = 45
-        static let announcementsTrailingOffset: CGFloat = -20
         static let headerPreferredHeight: CGFloat = 200
 
         static let animationDuration: CGFloat = 0.4

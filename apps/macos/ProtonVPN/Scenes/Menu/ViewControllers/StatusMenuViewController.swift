@@ -78,10 +78,6 @@ class StatusMenuViewController: NSViewController, StatusMenuViewControllerProtoc
             self?.contentChanged()
         }
 
-        viewModel.changeServerStateChanged = { [weak self] state in
-            self?.setupHeaderButtons(with: state)
-        }
-
         viewModel.disconnectWarning = { [weak self] viewModel in
             self?.disconnectWarning(viewModel)
         }
@@ -131,8 +127,6 @@ class StatusMenuViewController: NSViewController, StatusMenuViewControllerProtoc
         upgradeText.append(viewModel.upgradeForSecureCoreLabel)
         upgradeLabel.attributedStringValue = upgradeText
         upgradeLabel.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(upgrade)))
-        changeServerView.handler = viewModel.changeServerAction
-
         updateViewLayout()
     }
 
@@ -257,7 +251,7 @@ class StatusMenuViewController: NSViewController, StatusMenuViewControllerProtoc
             ipLabel.attributedStringValue = viewModel.ipAddress
 
             updateViewLayout()
-            setupHeaderButtons(with: .from(state: viewModel.canChangeServer))
+            setupHeaderButtons()
 
             secureCoreSwitch.setState(viewModel.serverType == .secureCore ? .on : .off)
 
@@ -265,13 +259,12 @@ class StatusMenuViewController: NSViewController, StatusMenuViewControllerProtoc
         }
     }
 
-    private func setupHeaderButtons(with _: ServerChangeViewState? = nil) {
+    private func setupHeaderButtons() {
         profileDropDown.isHidden = !viewModel.shouldShowProfileDropdown
         changeServerView.isHidden = !viewModel.shouldShowChangeServer
 
         connectButton.isConnected = viewModel.isConnected
         profileDropDown.isConnected = viewModel.isConnected
-        changeServerView.state = .from(state: viewModel.canChangeServer)
     }
 
     @objc

@@ -74,9 +74,7 @@ final class HeaderViewModel {
     var changeServerStateUpdated: ((ServerChangeViewState) -> Void)?
 
     var shouldShowChangeServer: Bool {
-        // The "Change Server" control has been removed from the sidebar header. Free users
-        // change servers via the Countries list or Quick Connect. (The menu-bar status item
-        // still exposes change-server independently.)
+        // Server selection remains available from the Countries list and Quick Connect.
         false
     }
 
@@ -203,7 +201,8 @@ final class HeaderViewModel {
         guard propertiesManager.featureFlags.pollNotificationAPI else {
             return false
         }
-        return announcementManager.fetchCurrentAnnouncementsFromStorage().contains(where: { $0.knownType == .default })
+        // Invalid or incomplete offers cannot produce a modal and would leave a dead button.
+        return announcementsViewModel.currentItem?.offer?.panel?.panelMode() != nil
     }
 
     var hasUnreadAnnouncements: Bool {

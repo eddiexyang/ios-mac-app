@@ -77,7 +77,8 @@ public struct CityStateListView: View {
         }
         .background(store.isExpanded ? Color(.background, .transparent) : .clear)
         .clipRectangle(cornerRadius: .radius8)
-        .padding(.trailing, .themeSpacing6)
+        // Keep the disclosure control clear of the system scroller's wider hit-test area.
+        .padding(.trailing, .themeSpacing16)
         .popover(item: $store.scope(state: \.serversList, action: \.serversList), attachmentAnchor: .rect(.bounds), arrowEdge: .trailing) { store in
             ServersListView(store: store)
         }
